@@ -1,0 +1,108 @@
+"""Tests for the instance settings store."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from craft_at_large_app.config import config, refresh_runtime_config_from_env
+from craft_at_large_app.settings_store import (
+    AppSettings,
+    read_settings,
+    update_settings,
+    load_settings_into_runtime,
+)
+
+
+def test_absent_file_reads_as_unset(tmp_path: Path) -> None:
+    """A fresh instance has no settings and keeps the environment defaults."""
+    assert read_settings(tmp_path) == AppSettings()
+
+
+def test_update_merges_and_round_trips(tmp_path: Path) -> None:
+    """Each write changes one field and leaves the others alone."""
+    update_settings(tmp_path, AppSettings(language="fr"))
+    merged = update_settings(tmp_path, AppSettings(memory_enabled=False))
+
+    assert merged == AppSettings(language="fr", memory_enabled=False)
+    assert read_settings(tmp_path) == merged
+
+    payload = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert payload["memory_enabled"] is False
+
+
+def test_booleans_survive_as_booleans(tmp_path: Path) -> None:
+    """The reason for leaving .env: a switch round-trips as a real boolean."""
+    update_settings(tmp_path, AppSettings(camera_enabled=False))
+
+    assert read_settings(tmp_path).camera_enabled is False
+
+
+def test_awkward_value_cannot_write_another_key(tmp_path: Path) -> None:
+    """A newline in a value stays inside that value (#532 is impossible here)."""
+    update_settings(tmp_path, AppSettings(hf_ws_url="ws://host\nHF_TOKEN=leaked"))
+
+    assert read_settings(tmp_path).hf_ws_url == "ws://host\nHF_TOKEN=leaked"
+    payload = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert set(payload) == {"version", "hf_ws_url"}
+
+
+def test_profile_languages_round_trip_and_apply(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Per-personality languages are stored next to the shared one and win at runtime."""
+    monkeypatch.setattr(config, "PROFILE_LANGUAGES", {})
+    update_settings(tmp_path, AppSettings(language="en", profile_languages={"sorry_bro": "fr"}))
+
+    load_settings_into_runtime(tmp_path)
+
+    assert read_settings(tmp_path).profile_languages == {"sorry_bro": "fr"}
+    assert config.PROFILE_LANGUAGES == {"sorry_bro": "fr"}
+
+
+def test_unusable_profile_language_entries_are_dropped(tmp_path: Path) -> None:
+    """One bad entry must not cost the user the languages saved for other personalities."""
+    (tmp_path / "settings.json").write_text(
+        json.dumps({"profile_languages": {"sorry_bro": "fr", "chess_coach": 3, "hype_bot": " "}}), encoding="utf-8"
+    )
+
+    assert read_settings(tmp_path).profile_languages == {"sorry_bro": "fr"}
+
+
+@pytest.mark.parametrize("content", ["{ not json", '"a string"', '{"memory_enabled": "false"}'])
+def test_unusable_file_is_ignored(tmp_path: Path, content: str) -> None:
+    """A corrupt or wrongly-typed file must not stop the app from starting."""
+    (tmp_path / "settings.json").write_text(content, encoding="utf-8")
+
+    assert read_settings(tmp_path) == AppSettings()
+
+
+@pytest.mark.parametrize("language", ["auto", "en", "fr"])
+def test_load_applies_over_the_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str) -> None:
+    """Stored settings win over the env-derived defaults."""
+    monkeypatch.setattr(config, "REALTIME_TRANSCRIPTION_LANGUAGE", "auto")
+    monkeypatch.setattr(config, "MEMORY_ENABLED", True)
+    update_settings(tmp_path, AppSettings(language=language, memory_enabled=False))
+
+    load_settings_into_runtime(tmp_path)
+
+    assert config.REALTIME_TRANSCRIPTION_LANGUAGE == language
+    assert config.MEMORY_ENABLED is False
+
+
+@pytest.mark.parametrize("raw_language, expected_language", [(None, "auto"), ("de", "de")])
+def test_load_leaves_unset_fields_to_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw_language: str | None, expected_language: str
+) -> None:
+    """A setting the user never changed keeps its environment value."""
+    if raw_language is None:
+        monkeypatch.delenv("REALTIME_TRANSCRIPTION_LANGUAGE", raising=False)
+    else:
+        monkeypatch.setenv("REALTIME_TRANSCRIPTION_LANGUAGE", raw_language)
+    monkeypatch.setattr(config, "REALTIME_TRANSCRIPTION_LANGUAGE", "stale")
+    monkeypatch.setattr(config, "MEMORY_ENABLED", True)
+    refresh_runtime_config_from_env()
+    update_settings(tmp_path, AppSettings(memory_enabled=False))
+
+    load_settings_into_runtime(tmp_path)
+
+    assert config.REALTIME_TRANSCRIPTION_LANGUAGE == expected_language

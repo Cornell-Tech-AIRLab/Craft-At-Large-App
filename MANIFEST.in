@@ -1,0 +1,3 @@
+recursive-include profiles *.md
+recursive-include profiles name.txt
+recursive-include profiles photo.*

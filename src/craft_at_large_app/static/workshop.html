@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Craft@Large Robot Studio</title>
+<style>
+  @font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 400; font-display: swap; src: url("/workshop/fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"), url("fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Atkinson Hyperlegible"; font-style: italic; font-weight: 400; font-display: swap; src: url("/workshop/fonts/atkinson-hyperlegible-latin-400-italic.woff2") format("woff2"), url("fonts/atkinson-hyperlegible-latin-400-italic.woff2") format("woff2"); }
+  @font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 700; font-display: swap; src: url("/workshop/fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"), url("fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Atkinson Hyperlegible"; font-style: italic; font-weight: 700; font-display: swap; src: url("/workshop/fonts/atkinson-hyperlegible-latin-700-italic.woff2") format("woff2"), url("fonts/atkinson-hyperlegible-latin-700-italic.woff2") format("woff2"); }
+
+  :root {
+    --indigo: #233160;
+    --indigo-deep: #1a2549;
+    --denim: #e9ecf5;
+    --paper: #ffffff;
+    --ink: #1d2233;
+    --ink-soft: #5b6075;
+    --line: #c9cedd;
+    --thread: #b8322a;
+    --plus: #dcefe0;
+    --minus: #f6dcd8;
+    --sans: "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+    --stitch-white: repeating-linear-gradient(90deg, rgba(255,255,255,.8) 0 12px, transparent 12px 20px);
+    --stitch-indigo: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 17px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--paper); color: var(--ink); font: 19px/1.5 var(--sans); }
+  button, input, textarea { font: inherit; color: inherit; }
+  h1, h2, h3 { margin: 0; font-weight: 700; line-height: 1.2; }
+  :focus-visible { outline: 3px solid #e3a33b; outline-offset: 2px; }
+  .muted { color: var(--ink-soft); }
+  .hint { color: var(--ink-soft); font-size: 16px; margin: 4px 0 12px; }
+  .empty { color: var(--ink-soft); padding: 32px 0; }
+
+  /* Buttons: square-cornered, like cut cloth */
+  .btn { min-height: 52px; padding: 10px 22px; border: 2px solid var(--indigo); border-radius: 4px; background: var(--paper); color: var(--indigo); font-weight: 700; cursor: pointer; }
+  .btn:hover { background: var(--denim); }
+  .btn.primary { background: var(--indigo); color: #fff; }
+  .btn.primary:hover { background: var(--indigo-deep); }
+  .btn.small { min-height: 46px; padding: 8px 16px; font-size: 17px; }
+  .btn.ghost { border-color: var(--line); color: var(--ink-soft); font-weight: 400; }
+  .btn.danger { background: var(--thread); border-color: var(--thread); color: #fff; }
+  .delete-btn { margin-left: auto; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .linkish { background: none; border: 0; padding: 4px 0; color: var(--indigo); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 16px; }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+
+  /* First screen: the three groups as stitched indigo swatches */
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 56px 40px 48px; }
+  header.top { margin-bottom: 36px; }
+  header.top h1 { font-size: 44px; color: var(--indigo); letter-spacing: -0.01em; }
+  header.top .sub { font-size: 21px; color: var(--ink-soft); margin-top: 10px; max-width: 34em; }
+  .step { font-size: 26px; margin: 0 0 18px; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+  .group-card { position: relative; min-height: 220px; padding: 34px 32px; border: 0; border-radius: 6px; background: var(--indigo); color: #fff; text-align: left; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; outline: 2px dashed rgba(255,255,255,.75); outline-offset: -12px; }
+  .group-card:hover { background: var(--indigo-deep); }
+  .group-card:focus-visible { outline: 3px solid #e3a33b; outline-offset: 3px; }
+  .group-card h2 { font-size: 40px; color: #fff; }
+  .group-photo { height: 240px; margin-bottom: 14px; border-radius: 4px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .group-photo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .group-photo.empty { background: rgba(255,255,255,.08); }
+  .group-card .meta { color: rgba(255,255,255,.85); font-size: 18px; }
+  .group-card .pill { align-self: flex-start; margin-top: auto; }
+  footer.research { margin-top: 56px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 16px; color: var(--ink-soft); }
+  footer.research a, .research-links a { color: var(--ink-soft); }
+
+  /* Workspace: indigo cloth bar with a white running stitch */
+  body.workspace .wrap { max-width: none; padding: 0; height: 100vh; display: flex; flex-direction: column; }
+  .appbar { flex: none; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 28px 20px; background: var(--indigo) var(--stitch-white) no-repeat 0 calc(100% - 8px) / 100% 2px; color: #fff; }
+  .brand { font-size: 20px; font-weight: 700; }
+  .appbar .btn { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); min-height: 44px; }
+  .appbar .btn:hover { background: rgba(255,255,255,.12); }
+  .tabs { display: flex; gap: 4px; margin-left: 8px; }
+  .tab { min-height: 44px; padding: 6px 16px; border: 0; border-radius: 4px; background: transparent; color: rgba(255,255,255,.8); font-weight: 700; cursor: pointer; }
+  .tab:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .tab[aria-current="page"] { background: #fff; color: var(--indigo); }
+  .spacer { flex: 1; }
+  .pill { display: inline-block; font-size: 16px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
+  .pill.live { background: #fff; color: var(--indigo); box-shadow: inset 3px 0 0 var(--thread); padding-left: 12px; }
+  .pill.other { color: rgba(255,255,255,.8); font-weight: 400; padding: 0; }
+  .pill.label { border: 1.5px solid var(--indigo); color: var(--indigo); font-weight: 700; }
+  .version-row .pill.live, .panel .pill.live { background: var(--denim); }
+
+  .workspace-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
+  .pane { min-height: 0; overflow: auto; padding: 24px 32px; }
+  .list-pane { padding: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); }
+  .pane-scroll { flex: 1; overflow: auto; padding: 24px 32px; }
+  .pane-title { font-size: 24px; margin-bottom: 4px; }
+  .from { font-size: 16px; color: var(--ink-soft); font-weight: 400; }
+  .panel { background: var(--paper); }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .panel-title { font-size: 24px; }
+
+  /* Formula guide */
+  .formula-box { margin: 12px 0 18px; font-size: 16px; line-height: 1.9; color: var(--ink-soft); }
+  .formula-box strong { color: var(--ink); }
+  mark.fpart { background: none; color: var(--indigo); font-weight: 700; padding: 0; border-bottom: 2px dashed var(--thread); }
+  .formula-example { line-height: 1.5; margin-top: 4px; font-style: italic; }
+
+  /* One-liners: a stitched list, not cards */
+  .liners { list-style: none; margin: 0; padding: 0; }
+  .liners li { background: var(--stitch-indigo) no-repeat 0 100% / 100% 2px; }
+  .liner { width: 100%; display: block; text-align: left; padding: 14px 16px 16px 18px; border: 0; background: transparent; cursor: pointer; border-radius: 0; }
+  .liner:hover { background: #f5f6fa; }
+  .liner.selected { background: var(--denim) linear-gradient(var(--thread), var(--thread)) no-repeat 0 0 / 4px 100%; }
+  .liner-num { display: none; }
+  .liner-body { display: flex; flex-direction: column; gap: 2px; }
+  .liner-name { font-weight: 700; font-size: 17px; color: var(--indigo); }
+  .liner-sentence { font-size: 18px; line-height: 1.45; }
+  .liner-warn { color: var(--thread); font-size: 16px; font-weight: 700; }
+  .add-liner { width: 100%; min-height: 56px; margin-top: 14px; border: 2px dashed var(--line); border-radius: 4px; background: none; color: var(--indigo); font-weight: 700; font-size: 18px; cursor: pointer; }
+  .add-liner:hover { border-color: var(--indigo); background: #f5f6fa; }
+
+  /* Editor */
+  .small-label { display: block; font-weight: 700; font-size: 17px; margin: 0 0 6px; }
+  .liner-name-input { width: 100%; min-height: 48px; padding: 8px 12px; margin-bottom: 18px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--paper); }
+  .liner-box { width: 100%; min-height: 128px; padding: 14px 16px; border: 2px solid var(--indigo); border-radius: 4px; background: var(--paper); font-size: 20px; line-height: 1.5; resize: vertical; }
+  .box-tools { display: flex; gap: 16px; align-items: baseline; margin: 6px 0 22px; font-size: 15px; }
+  .builder-title { font-size: 19px; margin: 0 0 12px; padding-top: 18px; background: var(--stitch-indigo) no-repeat 0 0 / 100% 2px; }
+  .part { border: 0; margin: 0 0 16px; padding: 0; }
+  .part legend { padding: 0; margin-bottom: 8px; }
+  .part-label { font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .part-hint { color: var(--ink-soft); font-size: 16px; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice { min-height: 46px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: 3px; background: var(--paper); cursor: pointer; font-size: 17px; }
+  .choice:hover { border-color: var(--indigo); background: var(--denim); }
+
+  /* Robot settings */
+  .settings { margin-top: 28px; padding-top: 22px; background: var(--stitch-indigo) no-repeat 0 0 / 100% 2px; }
+  .settings-label { font-size: 18px; margin: 18px 0 2px; }
+  .volume-row { display: flex; align-items: center; gap: 14px; max-width: 520px; }
+  .volume-row input[type="range"] { flex: 1; height: 44px; accent-color: var(--indigo); cursor: pointer; }
+  .volume-row input[type="range"]:disabled { cursor: default; opacity: .5; }
+  .volume-end { color: var(--ink-soft); font-size: 16px; }
+  #volume-value { min-width: 2.5em; text-align: right; font-weight: 700; font-size: 20px; color: var(--indigo); }
+  .voices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .voice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 58px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 3px; background: var(--paper); text-align: left; cursor: pointer; }
+  .voice:hover { border-color: var(--indigo); }
+  .voice[aria-checked="true"] { border: 2px solid var(--indigo); background: var(--denim); box-shadow: inset 4px 0 0 var(--thread); }
+  .voice-name { font-weight: 700; font-size: 17px; }
+  .voice-note { font-size: 14px; color: var(--ink-soft); }
+  .toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .toggle { min-height: 46px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: 3px; background: var(--paper); cursor: pointer; font-size: 16px; }
+  .toggle:hover { border-color: var(--indigo); }
+  .toggle[aria-pressed="true"] { background: var(--indigo); border-color: var(--indigo); color: #fff; font-weight: 700; }
+  .toggle[aria-pressed="true"]::before { content: "✓ "; }
+  .research-links { margin-top: 28px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 15px; }
+  .recording-link { color: var(--ink-soft); font-size: inherit; }
+  .recording-link.on { color: var(--thread); font-weight: 700; }
+
+  /* Save bar */
+  .savebar { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 32px 16px; background: #f5f6fa; border-top: 1px solid var(--line); }
+  .savebar input[type=text] { grid-area: note; min-height: 48px; padding: 6px 12px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--paper); }
+  .savebar .btn { min-height: 54px; }
+
+  /* Versions */
+  .version-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .version-list li { background: var(--stitch-indigo) no-repeat 0 100% / 100% 2px; }
+  .version-row { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 14px 16px 16px 18px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+  .version-row:hover { background: #f5f6fa; }
+  .version-row.selected { background: var(--denim) linear-gradient(var(--thread), var(--thread)) no-repeat 0 0 / 4px 100%; }
+  .version-name { font-weight: 700; font-size: 19px; }
+  .version-meta { width: 100%; margin: 0; font-size: 15px; color: var(--ink-soft); }
+  .panel .version-meta { margin-bottom: 14px; }
+  .note-box { margin-bottom: 16px; padding: 12px 0; background: var(--stitch-indigo) no-repeat 0 100% / 100% 2px; }
+  .version-settings { font-size: 16px; margin: 0 0 14px; line-height: 1.7; }
+  .version-settings .dot { display: block; height: 0; overflow: hidden; }
+  .prompt-lines { list-style: none; margin: 0; padding: 0; }
+  .prompt-lines li { padding: 10px 0 12px 14px; font-size: 18px; line-height: 1.45; box-shadow: inset 3px 0 0 var(--line); margin-bottom: 8px; }
+
+  /* Dialogs and messages */
+  dialog { border: 0; border-radius: 6px; padding: 0; width: min(820px, 94vw); max-height: 88vh; box-shadow: 0 20px 50px rgba(29,34,51,.25); }
+  dialog::backdrop { background: rgba(29,34,51,.5); }
+  dialog .inner { padding: 30px; overflow: auto; max-height: 88vh; }
+  dialog h2 { color: var(--indigo); font-size: 26px; margin-bottom: 10px; }
+  .field { display: block; font-weight: 700; margin: 18px 0 6px; }
+  dialog input[type=text], dialog textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 4px; }
+  .diff { white-space: pre-wrap; font-size: 19px; line-height: 1.7; border: 1.5px solid var(--line); border-radius: 4px; padding: 16px; }
+  .diff ins, .legend ins { background: var(--plus); text-decoration: none; }
+  .diff del, .legend del { background: var(--minus); color: #8a2a20; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 14px; font-size: 16px; }
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 20; max-width: 90vw; padding: 14px 24px; border-radius: 4px; background: var(--ink); color: #fff; font-size: 19px; box-shadow: 0 10px 30px rgba(29,34,51,.3); }
+  .toast.bad { background: #8a2a20; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 900px) {
+    body.workspace .wrap { height: auto; }
+    .workspace-grid { grid-template-columns: 1fr; }
+    .pane, .list-pane { overflow: visible; }
+    .voices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html.preview .brand::after, html.preview header.top h1::after { content: "Preview, no robot"; margin-left: 12px; padding: 3px 8px; border-radius: 3px; font-size: 14px; font-weight: 700; vertical-align: middle; background: #e3a33b; color: #1d2233; letter-spacing: 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p class="empty">Connecting to the robot…</p></div>
+
+<dialog id="dialog"><div class="inner" id="dialog-body"></div></dialog>
+
+<script type="module">
+const PREVIEW = location.protocol === "file:";
+if (PREVIEW) document.documentElement.classList.add("preview");
+
+/* ---------- JSON-RPC over the app's /rpc WebSocket ---------- */
+const RPC_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/rpc`;
+let socket = null, opening = null, counter = 0;
+const pending = new Map();
+
+function connect() {
+  if (socket && socket.readyState === WebSocket.OPEN) return Promise.resolve();
+  if (opening) return opening;
+  opening = new Promise((resolve, reject) => {
+    const ws = new WebSocket(RPC_URL);
+    let opened = false;
+    socket = ws;
+    ws.onopen = () => { opened = true; opening = null; resolve(); };
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      const waiter = msg.id != null ? pending.get(msg.id) : null;
+      if (!waiter) return;
+      pending.delete(msg.id);
+      clearTimeout(waiter.timer);
+      if (msg.error) {
+        const err = new Error(msg.error.message || "Something went wrong");
+        err.reason = msg.error.data?.reason;
+        waiter.reject(err);
+      } else waiter.resolve(msg.result);
+    };
+    ws.onclose = () => {
+      socket = null; opening = null;
+      for (const w of pending.values()) { clearTimeout(w.timer); w.reject(new Error("Lost connection to the robot.")); }
+      pending.clear();
+      if (!opened) reject(new Error("Cannot reach the robot."));
+    };
+  });
+  return opening;
+}
+
+async function rpc(method, params = {}, timeoutMs = 30000) {
+  if (PREVIEW) return previewRpc(method, params);
+  await connect();
+  const id = `ws-${++counter}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error("The robot took too long to answer.")); }, timeoutMs);
+    pending.set(id, { resolve, reject, timer });
+    socket.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+  });
+}
+
+/* ---------- Small DOM helpers (textContent only, never innerHTML with data) ---------- */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value == null || value === false) continue;
+    if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else if (key === "class") node.className = value;
+    else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const child of children.flat(Infinity)) {
+    if (child == null || child === false) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+
+function when(iso) {
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+let toastTimer = null;
+function toast(message, bad = false) {
+  document.querySelector(".toast")?.remove();
+  const node = el("div", { class: bad ? "toast bad" : "toast", role: "status" }, message);
+  document.body.append(node);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.remove(), 6000);
+}
+
+function remember(key, value) { try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch {} }
+function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+/* ---------- Word diff (LCS) for "What changed?" ---------- */
+function wordDiff(before, after) {
+  const a = before.split(/(\s+)/), b = after.split(/(\s+)/);
+  const n = a.length, m = b.length;
+  const table = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+  const parts = [];
+  let i = 0, j = 0;
+  const push = (kind, text) => {
+    const last = parts[parts.length - 1];
+    if (last && last.kind === kind) last.text += text; else parts.push({ kind, text });
+  };
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { push("same", a[i]); i++; j++; }
+    else if (table[i + 1][j] >= table[i][j + 1]) { push("del", a[i]); i++; }
+    else { push("ins", b[j]); j++; }
+  }
+  while (i < n) push("del", a[i++]);
+  while (j < m) push("ins", b[j++]);
+  return parts;
+}
+
+/* ---------- State ---------- */
+const state = { movements: [], groups: [], group: null, draft: null, busy: false, volume: null, recording: null };
+const app = document.getElementById("app");
+const dialog = document.getElementById("dialog");
+const dialogBody = document.getElementById("dialog-body");
+
+function movementLabel(id) { return state.movements.find((m) => m.id === id)?.label || id; }
+
+/* Researchers only: session recording (transcript + photos), off until started. */
+async function loadRecording() {
+  try { state.recording = await rpc("workshop.recording", {}); } catch { state.recording = { available: false }; }
+  updateRecordingLinks();
+}
+
+async function toggleRecording() {
+  const starting = !state.recording?.recording;
+  const previous = state.recording?.folder;
+  try {
+    state.recording = await rpc("workshop.recording", { start: starting });
+    toast(starting ? `Recording started in recordings/${state.recording.folder}.` : `Recording stopped. Saved in recordings/${previous}.`);
+  } catch (error) { showError(error); }
+  updateRecordingLinks();
+}
+
+function updateRecordingLinks() {
+  const rec = state.recording;
+  document.querySelectorAll(".recording-link").forEach((button) => {
+    button.hidden = !rec?.available;
+    button.classList.toggle("on", !!rec?.recording);
+    button.textContent = rec?.recording ? "● Recording · Stop recording" : "Start recording";
+  });
+}
+
+function recordingLink() {
+  const button = el("button", { class: "linkish recording-link", type: "button", hidden: true, onclick: toggleRecording }, "Start recording");
+  queueMicrotask(updateRecordingLinks);
+  return button;
+}
+
+async function loadState() {
+  if (!state.recording) loadRecording();
+  const result = await rpc("workshop.state");
+  state.movements = result.movements;
+  state.voices = result.voices || [];
+  state.defaultVoice = result.default_voice || state.voices[0] || "";
+  state.groups = result.groups;
+  state.runningGroup = result.running_group;
+}
+
+async function openGroup(groupId, { keepDraft = false, activate = false } = {}) {
+  state.group = await rpc("workshop.group", { group: groupId });
+  remember("craft.group", groupId);
+  if (!keepDraft || !state.draft) startDraftFrom(latestVersion());
+  renderGroup();
+  if (!state.volume) loadVolume();
+  if (activate && !state.group.running) await activateGroup();
+}
+
+/* Choosing a group puts it on the robot: the version it last tried, or its default. */
+async function activateGroup() {
+  const group = state.group;
+  const number = findVersion(group.active_version) ? group.active_version : 1;
+  setBusy(true);
+  toast(`Getting the robot ready as ${group.name}…`);
+  try {
+    const result = await rpc("workshop.try", { group: group.id, version: number }, 45000);
+    toast(result.applied ? `${group.name} is on the robot, using ${versionPhrase(number)}.` : result.message, !result.applied);
+    state.group = await rpc("workshop.group", { group: group.id });
+    renderGroup();
+  } catch (error) { showError(error); } finally { setBusy(false); }
+}
+
+/* The robot's speaker volume is one setting for the whole robot, not part of a version. */
+async function loadVolume() {
+  try { state.volume = await rpc("workshop.volume", {}); } catch { state.volume = { available: false, volume: null }; }
+  updateVolumeControl();
+}
+
+function updateVolumeControl() {
+  const slider = document.getElementById("volume-slider");
+  if (!slider || !state.volume) return;
+  const { available, volume } = state.volume;
+  slider.disabled = !available;
+  if (available) slider.value = String(volume);
+  document.getElementById("volume-value").textContent = available ? `${volume}` : "–";
+  document.getElementById("volume-hint").textContent = available
+    ? "Changes the robot's speaker right away. It beeps at the new level."
+    : "Connect the robot to change its volume.";
+}
+
+async function setVolume(level) {
+  try {
+    state.volume = await rpc("workshop.volume", { level });
+    if (!state.volume.available) toast("Couldn't reach the robot to change its volume.", true);
+  } catch (error) { showError(error); }
+  updateVolumeControl();
+}
+
+function volumeControl() {
+  const slider = el("input", { type: "range", id: "volume-slider", min: "0", max: "100", step: "5", value: "50", disabled: true,
+    "aria-label": "Robot volume",
+    oninput: (e) => { document.getElementById("volume-value").textContent = e.target.value; },
+    onchange: (e) => setVolume(Number(e.target.value)) });
+  const wrap = el("div", {},
+    el("h3", { class: "settings-label" }, "Volume"),
+    el("p", { class: "hint", id: "volume-hint" }, "Checking the robot's volume…"),
+    el("div", { class: "volume-row" },
+      el("span", { class: "volume-end" }, "Quiet"), slider, el("span", { class: "volume-end" }, "Loud"),
+      el("output", { id: "volume-value", for: "volume-slider" }, "–")));
+  queueMicrotask(updateVolumeControl);
+  return wrap;
+}
+
+function splitLines(text) {
+  return text.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+/* The worksheet formula: [Role/Persona] + [Trigger/Observation] + [Physical Gesture] + [App Goal]. */
+const SLOTS = [
+  { key: "persona", label: "Role / Persona", hint: "How should your robot talk and act with your circle?", options: [
+    ["Steady Instructor", "act as a steady instructor."], ["Cheerful Moderator", "act as a cheerful moderator."],
+    ["Crafty Cat", "act as a crafty cat."], ["Thoughtful Observer", "act as a thoughtful observer."],
+    ["Playful Icebreaker", "act as a playful icebreaker."]] },
+  { key: "trigger", label: "Trigger / Observation", hint: "What should your robot's camera/mic look and listen for?", options: [
+    ["15-min round timer", "when the 15-minute round timer ends,"], ["room goes quiet", "when the room goes quiet,"],
+    ["someone asks a question", "when someone asks a question,"], ["2 crafters collaborating", "when 2 crafters are collaborating,"]] },
+  { key: "gesture", label: "Physical Gesture", hint: "How should your robot use its body and movement?", options: [
+    ["Attentive head nod", "nod attentively"], ["antenna wiggling", "wiggle your antennas"],
+    ["head tilt like a cat", "tilt your head like a cat"], ["gentle body turning", "gently turn your body"]] },
+  { key: "goal", label: "App Goal", hint: "What key value does this app deliver?", options: [
+    ["Keep quilting on schedule", "to keep quilting on schedule."], ["spark discussion on cat sanctuary", "to spark discussion on the cat sanctuary."],
+    ["share sewing tips", "to share sewing tips."], ["cheer team", "to cheer the team on."]] },
+];
+const VOICE_NOTES = {
+  Aiden: "English", Ryan: "English", Dylan: "Chinese (Beijing)", Eric: "Chinese (Sichuan)", Ono_Anna: "Japanese",
+  Serena: "Chinese", Sohee: "Korean", Uncle_Fu: "Chinese", Vivian: "Chinese",
+};
+const voiceName = (voice) => (voice || "").replace(/_/g, " ");
+
+function startDraftFrom(version) {
+  const lines = splitLines(version.instructions);
+  const names = lines.map((_, i) => version.one_liner_names?.[i] || "");
+  state.draft = { basedOn: version.number, liners: lines.length ? lines : [""], names: lines.length ? names : [""], editing: 0, voice: version.voice || state.defaultVoice, movements: [...version.movements], note: "", label: "" };
+}
+
+/* The researchers' starting version (number 1) is shown as "Default", never "Version 1". */
+const versionName = (n) => (n === 1 ? "Default" : `Version ${n}`);
+const versionPhrase = (n) => (n === 1 ? "the default" : `version ${n}`);
+const shownLabel = (v) => (v.number === 1 && v.label === "Starting prompt" ? "" : v.label);
+
+function latestVersion() { return state.group.versions[state.group.versions.length - 1]; }
+function findVersion(number) { return state.group.versions.find((v) => v.number === number); }
+
+/* ---------- Screens ---------- */
+function sheetHeader() {
+  return [
+    el("header", { class: "top" },
+      el("h1", {}, "Craft@Large Robot Studio"),
+      el("p", { class: "sub" }, "Write how the robot should act in your crafting circle, then try it out. Every save is kept, so you can always go back.")),
+];
+}
+
+function compactHeader() {
+  return el("header", { class: "top compact" }, el("h1", {}, "Craft@Large Robot Studio"));
+}
+
+function step(number, title) {
+  return el("h2", { class: "step" }, title);
+}
+
+function renderPicker() {
+  state.group = null;
+  remember("craft.group", null);
+  app.replaceChildren(
+    ...sheetHeader(),
+    step(1, "Which group are you in?"),
+    el("div", { class: "groups" },
+      state.groups.map((group) =>
+        el("button", { class: "group-card", onclick: () => openGroup(group.id, { activate: true }).catch(showError) },
+          el("div", { class: group.photo ? "group-photo" : "group-photo empty" },
+            group.photo ? el("img", { src: group.photo, alt: `${group.name}, the robot` }) : null),
+          el("h2", {}, group.name),
+          el("div", { class: "meta" }, `${group.version_count} version${group.version_count === 1 ? "" : "s"} saved`),
+          state.runningGroup === group.id ? el("span", { class: "pill live" }, `On the robot now`) : null))),
+    researchFooter());
+}
+
+function renderGroup() {
+  const group = state.group;
+  state.tab ||= "edit";
+  const tabs = el("nav", { class: "tabs", "aria-label": "Sections" },
+    el("button", { class: "tab", "aria-current": state.tab === "edit" ? "page" : null, onclick: () => { state.tab = "edit"; renderGroup(); } }, "Write one-liners"),
+    el("button", { class: "tab", "aria-current": state.tab === "versions" ? "page" : null, onclick: () => { state.tab = "versions"; renderGroup(); } },
+      `Versions (${group.versions.length})`));
+  const onRobot = group.running && group.active_version != null
+    ? el("span", { class: "pill live" }, `Robot is running ${versionPhrase(group.active_version)}`)
+    : el("span", { class: "pill other" }, "Robot isn't running your group yet");
+
+  document.body.classList.add("workspace");
+  app.replaceChildren(
+    el("header", { class: "appbar" },
+      el("div", { class: "brand" }, group.name),
+      el("button", { class: "btn small", onclick: () => { document.body.classList.remove("workspace"); loadState().then(renderPicker).catch(showError); } }, "Change group"),
+      tabs,
+      el("div", { class: "spacer" }),
+      onRobot),
+    state.tab === "edit" ? renderEditor() : renderHistory());
+}
+
+function renderEditor() {
+  const draft = state.draft;
+  if (draft.editing == null) draft.editing = 0;
+  const list = el("ol", { class: "liners", id: "instructions" });
+  const panel = el("section", { class: "pane panel", "aria-label": "Edit the selected one-liner" });
+
+  const select = (index) => { draft.editing = index; paintList(); paintPanel(); };
+
+  const paintList = () => {
+    list.replaceChildren(...draft.liners.map((text, index) => el("li", {},
+      el("button", {
+        class: ["liner", index === draft.editing ? "selected" : "", text.trim() ? "" : "incomplete"].join(" "),
+        type: "button", "aria-pressed": String(index === draft.editing), onclick: () => select(index),
+      },
+        el("span", { class: "liner-num", "aria-hidden": "true" }, String(index + 1)),
+        el("span", { class: "liner-body" },
+          draft.names[index]?.trim() ? el("span", { class: "liner-name" }, draft.names[index]) : null,
+          text.trim() ? el("span", { class: "liner-sentence" }, text) : el("span", { class: "liner-warn" }, "Empty: write a sentence"))))));
+  };
+
+  const paintPanel = () => {
+    const index = draft.editing;
+    if (draft.liners[index] == null) {
+      panel.replaceChildren(el("p", { class: "empty" }, "Pick a one-liner on the left, or add a new one."));
+      return;
+    }
+    const nameInput = el("input", { type: "text", id: "liner-name", class: "liner-name-input", maxlength: 80 });
+    nameInput.value = draft.names[index] || "";
+    nameInput.addEventListener("input", () => { draft.names[index] = nameInput.value; paintList(); });
+    const box = el("textarea", { id: "liner-text", class: "liner-box", rows: 4,
+      placeholder: "Write your one-liner as a plain sentence, or tap the buttons below to build one." });
+    box.value = draft.liners[index];
+    box.addEventListener("input", () => { draft.liners[index] = box.value.replace(/\n+/g, " "); box.dataset.cursor = String(box.selectionStart); paintList(); });
+    box.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+
+    const insert = (phrase) => {
+      const text = box.value;
+      const at = box.dataset.cursor != null ? Math.min(Number(box.dataset.cursor), text.length) : text.length;
+      const before = text.slice(0, at).trimEnd();
+      const after = text.slice(at).trimStart();
+      const piece = !before || /[.!?]$/.test(before) ? phrase.charAt(0).toUpperCase() + phrase.slice(1) : phrase;
+      const joined = before ? `${before} ${piece}` : piece;
+      box.value = after ? `${joined} ${after}` : joined;
+      draft.liners[index] = box.value;
+      box.focus();
+      box.setSelectionRange(joined.length, joined.length);
+      box.dataset.cursor = String(joined.length);
+      paintList();
+    };
+    box.addEventListener("keyup", () => { box.dataset.cursor = String(box.selectionStart); });
+    box.addEventListener("click", () => { box.dataset.cursor = String(box.selectionStart); });
+    box.addEventListener("blur", () => { box.dataset.cursor = String(box.selectionStart); });
+
+    const remove = el("button", { class: "btn small ghost", type: "button", onclick: () => {
+      draft.liners.splice(index, 1);
+      draft.names.splice(index, 1);
+      if (!draft.liners.length) { draft.liners.push(""); draft.names.push(""); }
+      draft.editing = Math.min(index, draft.liners.length - 1);
+      paintList(); paintPanel();
+    } }, "Remove this one-liner");
+
+    panel.replaceChildren(
+      el("div", { class: "panel-head" },
+        el("h2", { class: "panel-title" }, `One-liner ${index + 1}`),
+        remove),
+      el("label", { class: "small-label", for: "liner-name" }, "Name ", el("span", { class: "muted" }, "(optional, only your group sees it)")),
+      nameInput,
+      el("label", { class: "small-label", for: "liner-text" }, "One-liner"),
+      box,
+      el("div", { class: "box-tools" },
+        el("button", { class: "linkish", type: "button", onclick: () => { box.value = ""; draft.liners[index] = ""; box.dataset.cursor = "0"; box.focus(); paintList(); } }, "Clear")),
+      el("h3", { class: "builder-title" }, "Add words from the formula"),
+      ...SLOTS.map((slot) => el("fieldset", { class: `part part-${slot.key}` },
+        el("legend", {}, el("span", { class: "part-label" }, slot.label), el("span", { class: "part-hint" }, slot.hint)),
+        el("div", { class: "choices" },
+          slot.options.map(([label, phrase]) => el("button", { class: "choice", type: "button", title: `Adds “${phrase}”`, onclick: () => insert(phrase) }, label))))));
+  };
+
+  const addButton = el("button", { class: "add-liner", type: "button", onclick: () => {
+    draft.liners.push("");
+    draft.names.push("");
+    select(draft.liners.length - 1);
+    list.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById("liner-text")?.focus();
+  } }, "+ Add a one-liner");
+
+  const moves = el("div", { class: "toggles", role: "group", "aria-label": "What the robot can do" },
+    state.movements.map((movement) => {
+      const button = el("button", { class: "toggle", type: "button", "aria-pressed": String(draft.movements.includes(movement.id)) }, movement.label);
+      button.addEventListener("click", () => {
+        const on = !draft.movements.includes(movement.id);
+        draft.movements = on ? [...draft.movements, movement.id] : draft.movements.filter((id) => id !== movement.id);
+        button.setAttribute("aria-pressed", String(on));
+      });
+      return button;
+    }));
+  const voices = el("div", { class: "voices", role: "radiogroup", "aria-label": "Robot voice" },
+    state.voices.map((voice) => {
+      const button = el("button", { class: "voice", type: "button", role: "radio", "aria-checked": String(draft.voice === voice) },
+        el("span", { class: "voice-name" }, voiceName(voice)),
+        el("span", { class: "voice-note" }, VOICE_NOTES[voice] ? `recorded in ${VOICE_NOTES[voice]}` : ""));
+      button.addEventListener("click", () => {
+        draft.voice = voice;
+        voices.querySelectorAll(".voice").forEach((b) => b.setAttribute("aria-checked", String(b === button)));
+      });
+      return button;
+    }));
+  const settings = el("section", { class: "settings", "aria-labelledby": "settings-title" },
+    el("h2", { class: "pane-title", id: "settings-title" }, "Robot settings"),
+    el("h3", { class: "settings-label" }, "Voice"),
+    el("p", { class: "hint" }, "Every voice can speak English. Press “Save and try” to hear it on the robot."),
+    voices,
+    el("h3", { class: "settings-label" }, "What can the robot do?"),
+    el("p", { class: "hint" }, "Tap to turn on or off."),
+    moves,
+    volumeControl());
+
+
+  const save = async (tryIt) => {
+    const kept = draft.liners.map((text, i) => [text.trim(), (draft.names[i] || "").trim()]).filter(([text]) => text);
+    draft.liners = kept.map(([text]) => text);
+    draft.names = kept.map(([, name]) => name);
+    if (!draft.liners.length) {
+      draft.liners = [""];
+      draft.names = [""];
+      select(0);
+      toast("Please write at least one one-liner first.", true);
+      return;
+    }
+    const instructions = draft.liners.join("\n");
+    setBusy(true);
+    try {
+      const result = await rpc("workshop.save", {
+        group: state.group.id, instructions, one_liner_names: draft.names, voice: draft.voice, movements: draft.movements,
+        note: draft.note, label: draft.label, based_on: draft.basedOn, try: tryIt,
+      }, 45000);
+      const number = result.version.number;
+      toast(tryIt ? (result.message || `Saved as version ${number}.`) : `Saved as version ${number}.`, tryIt && !result.applied);
+      state.draft = null;
+      state.selectedVersion = number;
+      await openGroup(state.group.id);
+    } catch (error) { showError(error); } finally { setBusy(false); }
+  };
+
+  paintList();
+  paintPanel();
+  const base = findVersion(draft.basedOn);
+  return el("main", { class: "workspace-grid" },
+    el("section", { class: "pane list-pane", "aria-labelledby": "edit-title" },
+      el("div", { class: "pane-scroll" },
+        el("h2", { class: "pane-title", id: "edit-title" }, "Your one-liners",
+          el("span", { class: "from" }, ` · from ${versionPhrase(draft.basedOn)}${base && shownLabel(base) ? ` (${shownLabel(base)})` : ""}`)),
+        el("div", { class: "formula-box" },
+          el("strong", {}, "The One-Liner Formula: "),
+          SLOTS.map((slot, i) => [el("mark", { class: "fpart" }, `[${slot.label}]`), i < SLOTS.length - 1 ? " + " : ""])),
+        list,
+        addButton,
+        settings,
+        el("div", { class: "research-links" },
+          el("a", { href: "/workshop/export.csv" }, "Download all versions (spreadsheet)"),
+          el("a", { href: "/", target: "_blank", rel: "noopener" }, "Full robot controls"),
+          recordingLink())),
+      el("div", { class: "savebar" },
+        el("button", { class: "btn primary", "data-busy": true, onclick: () => save(true) }, "Save and try on robot"),
+        el("button", { class: "btn", "data-busy": true, onclick: () => save(false) }, "Save only"))),
+    panel);
+}
+
+function renderHistory() {
+  const versions = [...state.group.versions].reverse();
+  if (!findVersion(state.selectedVersion)) state.selectedVersion = state.group.running ? state.group.active_version : versions[0].number;
+  const selected = findVersion(state.selectedVersion);
+  const isActive = (v) => state.group.running && state.group.active_version === v.number;
+
+  const list = el("ol", { class: "version-list" },
+    versions.map((version) => el("li", {},
+      el("button", {
+        class: ["version-row", version.number === selected.number ? "selected" : ""].join(" "),
+        type: "button", "aria-pressed": String(version.number === selected.number),
+        onclick: () => { state.selectedVersion = version.number; renderGroup(); },
+      },
+        el("span", { class: "version-name" }, versionName(version.number)),
+        shownLabel(version) ? el("span", { class: "pill label" }, shownLabel(version)) : null,
+        isActive(version) ? el("span", { class: "pill live" }, "On the robot") : null,
+        el("span", { class: "version-meta" }, `Saved ${when(version.saved_at)}${version.author ? ` by ${version.author}` : ""}`)))));
+
+  const lines = splitLines(selected.instructions);
+  return el("main", { class: "workspace-grid" },
+    el("section", { class: "pane list-pane", "aria-label": "All versions" },
+      el("div", { class: "pane-scroll" },
+        el("h2", { class: "pane-title" }, "Versions"),
+        el("p", { class: "hint" }, "Newest first. Pick one to see it, try it on the robot, or add a note."),
+        list)),
+    el("section", { class: "pane panel", "aria-label": versionName(selected.number) },
+      el("div", { class: "panel-head" },
+        el("h2", { class: "panel-title" }, versionName(selected.number)),
+        isActive(selected) ? el("span", { class: "pill live" }, "On the robot") :
+          el("button", { class: "btn primary", "data-busy": true, onclick: () => tryVersion(selected.number) }, "Try on robot")),
+      el("p", { class: "version-meta" }, `Saved ${when(selected.saved_at)}${selected.author ? ` by ${selected.author}` : ""}${selected.based_on ? `, changed from ${versionPhrase(selected.based_on)}` : ""}.`),
+      el("div", { class: "note-box" },
+        el("strong", {}, "Observations / Tweaks: "),
+        selected.note || el("span", { class: "muted" }, "None yet."),
+        " ",
+        el("button", { class: "linkish", onclick: () => showAnnotate(selected) }, selected.note || selected.label ? "Edit" : "Add a note")),
+      el("p", { class: "version-settings" },
+        el("strong", {}, "Voice: "), voiceName(selected.voice || state.defaultVoice),
+        el("span", { class: "dot" }, " · "),
+        el("strong", {}, "Can: "), selected.movements.length ? selected.movements.map(movementLabel).join(", ") : "only talk"),
+      lines.length ? null : el("p", { class: "muted" }, "No one-liners yet."),
+      el("ol", { class: "prompt-lines" }, lines.map((line, i) => el("li", {},
+        selected.one_liner_names?.[i] ? el("div", { class: "liner-name" }, selected.one_liner_names[i]) : null,
+        line))),
+      el("div", { class: "actions" },
+        el("button", { class: "btn small", onclick: () => { startDraftFrom(selected); state.tab = "edit"; renderGroup(); } }, "Edit from this version"),
+        selected.number > 1 ? el("button", { class: "btn small", onclick: () => showDiff(selected) }, "What changed?") : null,
+        selected.number > 1 ? el("button", { class: "btn small ghost delete-btn", onclick: () => showDelete(selected) }, "Delete version") : null)));
+}
+
+async function tryVersion(number) {
+  setBusy(true);
+  try {
+    const result = await rpc("workshop.try", { group: state.group.id, version: number }, 45000);
+    toast(result.message, !result.applied);
+    await openGroup(state.group.id, { keepDraft: true });
+  } catch (error) { showError(error); } finally { setBusy(false); }
+}
+
+/* ---------- Dialogs ---------- */
+function closeButton() { return el("button", { class: "btn", onclick: () => dialog.close() }, "Close"); }
+
+function showDiff(version) {
+  const previous = findVersion(version.based_on) || findVersion(version.number - 1) || state.group.versions.find((v) => v.number < version.number);
+  if (!previous) return;
+  const parts = wordDiff(previous.instructions, version.instructions);
+  const added = version.movements.filter((id) => !previous.movements.includes(id));
+  const removed = previous.movements.filter((id) => !version.movements.includes(id));
+  const unchanged = parts.every((p) => p.kind === "same");
+
+  dialogBody.replaceChildren(
+    el("h2", { style: "font-size:28px" }, `What changed from ${versionPhrase(previous.number)} to ${versionPhrase(version.number)}`),
+    el("div", { class: "legend" }, el("span", {}, el("ins", {}, "Green"), " = added"), el("span", {}, el("del", {}, "Red"), " = removed")),
+    unchanged ? el("p", {}, "The words are the same.") :
+      el("div", { class: "diff" }, parts.map((p) => p.kind === "same" ? p.text : el(p.kind, {}, p.text))),
+    (previous.voice || state.defaultVoice) !== (version.voice || state.defaultVoice)
+      ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Voice: "), `${voiceName(previous.voice || state.defaultVoice)} → ${voiceName(version.voice || state.defaultVoice)}`)
+      : null,
+    added.length || removed.length
+      ? el("div", { style: "margin-top:16px" },
+          added.length ? el("p", {}, el("strong", {}, "Now it can: "), added.map(movementLabel).join(", ")) : null,
+          removed.length ? el("p", {}, el("strong", {}, "It no longer can: "), removed.map(movementLabel).join(", ")) : null)
+      : el("p", { style: "margin-top:16px" }, "What the robot can do stayed the same."),
+    el("div", { class: "actions" }, closeButton()));
+  dialogBody.querySelectorAll(".legend ins, .legend del").forEach((n) => { n.style.padding = "0 6px"; });
+  dialog.showModal();
+}
+
+function showDelete(version) {
+  const onRobot = state.group.running && state.group.active_version === version.number;
+  dialogBody.replaceChildren(
+    el("h2", { style: "font-size:30px" }, `Delete version ${version.number}?`),
+    el("p", {}, "It will disappear from your list of versions. Your other versions stay the same."),
+    ...(onRobot ? [el("p", {}, "The robot keeps using it until you try a different version.")] : []),
+    el("div", { class: "actions" },
+      el("button", { class: "btn danger", onclick: async () => {
+        try {
+          await rpc("workshop.delete", { group: state.group.id, version: version.number });
+          dialog.close();
+          state.selectedVersion = null;
+          toast(`Version ${version.number} deleted.`);
+          await openGroup(state.group.id, { keepDraft: true });
+        } catch (error) { showError(error); }
+      } }, "Delete"),
+      el("button", { class: "btn", onclick: () => dialog.close() }, "Keep it")));
+  dialog.showModal();
+}
+
+function showAnnotate(version) {
+  const label = el("input", { type: "text", id: "label-input" });
+  label.value = shownLabel(version);
+  const note = el("textarea", { id: "note-input", style: "min-height:168px", placeholder: "What did you notice when you tried it?" });
+  note.value = version.note;
+  dialogBody.replaceChildren(
+    el("h2", { style: "font-size:30px" }, `${versionName(version.number)}: Observations`),
+    el("label", { class: "field", for: "label-input" }, "Give it a name (optional)"), label,
+    el("label", { class: "field", for: "note-input" }, "Observations / Tweaks:"), note,
+    el("div", { class: "actions" },
+      el("button", { class: "btn primary", onclick: async () => {
+        try {
+          await rpc("workshop.annotate", { group: state.group.id, version: version.number, note: note.value, label: label.value });
+          dialog.close();
+          toast("Note saved.");
+          await openGroup(state.group.id, { keepDraft: true });
+        } catch (error) { showError(error); }
+      } }, "Save note"),
+      closeButton()));
+  dialog.showModal();
+}
+
+function researchFooter() {
+  return el("footer", { class: "research" },
+    el("span", {}, "For researchers:"),
+    el("a", { href: "/workshop/export.csv" }, "Download all versions (spreadsheet)"),
+    el("a", { href: "/", target: "_blank", rel: "noopener" }, "Full robot controls"),
+    recordingLink());
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  document.querySelectorAll("[data-busy]").forEach((b) => { b.disabled = busy; });
+  if (busy) toast("Working… the robot may pause for a few seconds.");
+}
+
+function showError(error) {
+  console.error(error);
+  toast(error?.message || "Something went wrong. Please ask a researcher.", true);
+}
+
+/* Pick up versions saved from another tablet, without touching the editor. */
+setInterval(async () => {
+  if (!state.group || state.busy || dialog.open) return;
+  try {
+    const fresh = await rpc("workshop.group", { group: state.group.id });
+    if (fresh.versions.length !== state.group.versions.length || fresh.active_version !== state.group.active_version || fresh.running !== state.group.running) {
+      state.group = fresh;
+      const typing = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+      if (!typing) renderGroup();
+    }
+  } catch { /* the robot may be restarting; try again next tick */ }
+}, 10000);
+
+/* ---------- Preview mode: used when this file is opened directly, with no app running ---------- */
+const DEMO_SEEDS = {"craft_group_a": {"name": "Crafty Carl", "instructions": "", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "idle_do_nothing", "volume_control"]}, "craft_group_b": {"name": "OS-10", "instructions": "OS-10 is a warm facilitator. OS-10 should turn its body away when participants are silent. OS-10 should tilt its head when listening to a question.", "tools": ["move_head", "turn_body", "play_emotion", "stop_emotion", "head_tracking", "dance", "stop_dance", "idle_do_nothing", "volume_control"]}, "craft_group_c": {"name": "Reesy The Great", "instructions": "", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "sweep_look", "idle_do_nothing", "volume_control"]}};
+const DEMO_MOVEMENTS = [{"id": "head", "label": "Move its head (look around, tilt)", "tools": ["move_head"]}, {"id": "turn", "label": "Turn its body (left, right, away)", "tools": ["turn_body"]}, {"id": "emotions", "label": "Show emotions with head and antennas", "tools": ["play_emotion", "stop_emotion"]}, {"id": "follow", "label": "Follow faces with its head", "tools": ["head_tracking"]}, {"id": "look_around", "label": "Look around the room", "tools": ["sweep_look"]}, {"id": "dance", "label": "Dance", "tools": ["dance", "stop_dance"]}, {"id": "camera", "label": "Use the camera to look at things", "tools": ["camera"]}, {"id": "remember", "label": "Remember what people tell it", "tools": ["remember", "forget"]}, {"id": "status", "label": "Answer questions about itself (Wi-Fi, software, head tilt)", "tools": ["robot_status"]}, {"id": "tasks", "label": "Check on or stop something it is doing", "tools": ["task_status", "task_cancel"]}, {"id": "sleep", "label": "Go to sleep and turn off when asked", "tools": ["go_to_sleep"]}];
+// Opened as a file, the page finds group photos in the project's profiles folder.
+const DEMO_PHOTOS = Object.fromEntries(["craft_group_a", "craft_group_b", "craft_group_c"].map((id) => [id, `../../../profiles/${id}/photo.png`]));
+const ALWAYS_ON = ["idle_do_nothing", "volume_control"];
+const movementTools = new Set(DEMO_MOVEMENTS.flatMap((m) => m.tools));
+const demo = { groups: {}, running: null, volume: 60 };
+const nowIso = () => new Date().toISOString();
+const movementsFor = (tools) => DEMO_MOVEMENTS.filter((m) => m.tools.every((t) => tools.includes(t))).map((m) => m.id);
+const groupName = (id) => DEMO_SEEDS[id]?.name || `Group ${id.replace("craft_group_", "").toUpperCase()}`;
+const asJson = (v) => ({ ...v, movements: movementsFor(v.tools) });
+function history(id) {
+  if (!DEMO_SEEDS[id]) throw Object.assign(new Error(`Unknown group ${id}`), { reason: "unknown_group" });
+  demo.groups[id] ||= { active_version: null, versions: [{ number: 1, saved_at: nowIso(), author: "Researchers", label: "Starting prompt",
+    instructions: DEMO_SEEDS[id].instructions, tools: [...DEMO_SEEDS[id].tools], note: "", based_on: null, tried_at: [] }] };
+  return demo.groups[id];
+}
+function tryIt(id, number) {
+  const h = history(id);
+  const v = h.versions.find((x) => x.number === number);
+  v.tried_at.push(nowIso());
+  h.active_version = number;
+  demo.running = id;
+  return { applied: true, message: `Preview: with the robot connected, it would now use ${versionPhrase(number)}.`, version: asJson(v) };
+}
+const handlers = {
+  "workshop.state": () => ({
+    groups: Object.keys(DEMO_SEEDS).map((id) => { const h = history(id); return { id, name: groupName(id), version_count: h.versions.length, active_version: h.active_version, photo: DEMO_PHOTOS[id] || null }; }),
+    movements: DEMO_MOVEMENTS, voices: ["Aiden", "Ryan", "Dylan", "Eric", "Ono_Anna", "Serena", "Sohee", "Uncle_Fu", "Vivian"], default_voice: "Aiden", running_group: demo.running }),
+  "workshop.group": ({ group }) => { const h = history(group); return { id: group, name: groupName(group), active_version: h.active_version, running: demo.running === group, versions: h.versions.map(asJson) }; },
+  "workshop.save": (p) => {
+    const h = history(p.group);
+    const text = String(p.instructions || "").trim();
+    if (!text) throw Object.assign(new Error("The robot's instructions cannot be empty."), { reason: "empty_instructions" });
+    const parent = h.versions.find((v) => v.number === p.based_on);
+    const tools = [...new Set([...DEMO_MOVEMENTS.filter((m) => p.movements.includes(m.id)).flatMap((m) => m.tools),
+      ...(parent ? parent.tools.filter((t) => !movementTools.has(t)) : []), ...ALWAYS_ON])];
+    const v = { number: Math.max(...h.versions.map((x) => x.number)) + 1, saved_at: nowIso(), author: String(p.author || "").trim(),
+      instructions: text, tools, note: String(p.note || "").trim(), label: String(p.label || "").trim(), based_on: parent ? parent.number : null, tried_at: [],
+      voice: String(p.voice || (parent ? parent.voice : "") || ""),
+      one_liner_names: (p.one_liner_names || []).some((n) => String(n).trim()) ? p.one_liner_names.map((n) => String(n).trim()) : [] };
+    h.versions.push(v);
+    return p.try ? { ...tryIt(p.group, v.number), version: asJson(v) } : { version: asJson(v), applied: false };
+  },
+  "workshop.try": ({ group, version }) => tryIt(group, version),
+  "workshop.delete": ({ group, version }) => {
+    if (version === 1) throw Object.assign(new Error("The starting version cannot be deleted."), { reason: "cannot_delete_start" });
+    const h = history(group);
+    h.versions = h.versions.filter((x) => x.number !== version);
+    if (h.active_version === version) h.active_version = null;
+    return { deleted: version };
+  },
+  "workshop.volume": ({ level }) => {
+    if (level != null) demo.volume = level;
+    return { available: true, volume: demo.volume };
+  },
+  "workshop.recording": ({ start }) => {
+    if (start === true && !demo.recording) demo.recording = new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "-");
+    if (start === false) demo.recording = null;
+    return { available: true, recording: !!demo.recording, folder: demo.recording };
+  },
+  "workshop.annotate": ({ group, version, note, label }) => {
+    const v = history(group).versions.find((x) => x.number === version);
+    if (note != null) v.note = String(note).trim();
+    if (label != null) v.label = String(label).trim();
+    return { version: asJson(v) };
+  },
+};
+async function previewRpc(method, params = {}) {
+  await new Promise((r) => setTimeout(r, method === "workshop.try" || params.try ? 600 : 80));
+  return structuredClone(handlers[method](params));
+}
+function demoCsv() {
+  const q = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const rows = [["group", "version", "label", "saved_at_utc", "saved_by", "based_on_version", "instructions", "note", "times_tried"]];
+  for (const [id, h] of Object.entries(demo.groups)) for (const v of h.versions)
+    rows.push([groupName(id), v.number, v.label, v.saved_at, v.author, v.based_on ?? "", v.instructions, v.note, v.tried_at.length]);
+  return rows.map((r) => r.map(q).join(",")).join("\n");
+}
+if (PREVIEW) document.addEventListener("click", (event) => {
+  const link = event.target.closest?.("a");
+  if (!link) return;
+  const href = link.getAttribute("href");
+  if (href !== "/workshop/export.csv" && href !== "/") return;
+  event.preventDefault();
+  if (href === "/") {
+    dialogBody.replaceChildren(el("h2", {}, "Full robot controls"),
+      el("p", {}, "In the real app, this opens the conversation app's own control page: microphone, connection, voices, and personalities."),
+      el("div", { class: "actions" }, closeButton()));
+  } else {
+    const box = el("textarea", { readonly: true, style: "min-height:240px;font:14px/1.4 monospace;border:1.5px solid var(--line);padding:10px" });
+    box.value = demoCsv();
+    dialogBody.replaceChildren(el("h2", {}, "All versions (spreadsheet)"),
+      el("p", {}, "In the real app this downloads as a CSV file. In the demo, copy it and paste it into a spreadsheet."), box,
+      el("div", { class: "actions" },
+        el("button", { class: "btn primary", onclick: () => navigator.clipboard.writeText(box.value).then(() => toast("Copied.")).catch(() => { box.select(); toast("Press Ctrl+C or Cmd+C to copy.", true); }) }, "Copy"),
+        closeButton()));
+  }
+  dialog.showModal();
+});
+
+
+/* ---------- Start ---------- */
+(async function start() {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await loadState();
+      break;
+    } catch (error) {
+      if (attempt === 0) app.replaceChildren(el("p", { class: "empty" }, "Waiting for the robot to start…"));
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  const saved = recall("craft.group");
+  if (saved && state.groups.some((g) => g.id === saved)) {
+    try { await openGroup(saved, { activate: true }); return; } catch (error) { showError(error); }
+  }
+  renderPicker();
+})();
+</script>
+</body>
+</html>
