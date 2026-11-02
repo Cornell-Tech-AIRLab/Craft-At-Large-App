@@ -150,6 +150,8 @@
   .research-links { margin-top: 28px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 15px; }
   .recording-link { color: var(--ink-soft); font-size: inherit; }
   .recording-link.on { color: var(--thread); font-weight: 700; }
+  .recordings-waiting { display: contents; }
+  .waiting-link { color: var(--thread); font-size: inherit; }
 
   /* Save bar */
   .savebar { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 32px 16px; background: #f5f6fa; border-top: 1px solid var(--line); }
@@ -326,8 +328,38 @@ async function toggleRecording() {
   const previous = state.recording?.folder;
   try {
     state.recording = await rpc("workshop.recording", { start: starting });
-    toast(starting ? `Recording started in recordings/${state.recording.folder}.` : `Recording stopped. Saved in recordings/${previous}.`);
+    if (starting) toast("Recording started.");
   } catch (error) { showError(error); }
+  updateRecordingLinks();
+  if (!starting && previous) await downloadRecording(previous);
+}
+
+/* Download a finished session as a zip. Once the whole file has arrived, the robot deletes its copy. */
+async function downloadRecording(name) {
+  if (PREVIEW) {
+    state.recording = await rpc("workshop.recording_downloaded", { session: name, size: 0, sha256: "" });
+    toast("Preview: the recording would download as a zip now.");
+    updateRecordingLinks();
+    return;
+  }
+  toast("Downloading the recording…");
+  try {
+    const response = await fetch(`/workshop/recordings/${encodeURIComponent(name)}.zip`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`The robot could not send the recording (${response.status}).`);
+    const blob = await response.blob();
+    const expected = Number(response.headers.get("Content-Length") || blob.size);
+    if (blob.size !== expected) throw new Error("The recording did not download completely. Try again.");
+    const link = el("a", { href: URL.createObjectURL(blob), download: `craft_at_large_recording_${name}.zip` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+    const result = await rpc("workshop.recording_downloaded", { session: name, size: blob.size, sha256: response.headers.get("X-Content-SHA256") || "" });
+    state.recording = result;
+    toast(result.deleted ? "Recording downloaded to this laptop and removed from the robot." : "Recording downloaded to this laptop.", !result.matched);
+  } catch (error) {
+    toast(`${error.message} The recording is still on the robot.`, true);
+  }
   updateRecordingLinks();
 }
 
@@ -338,12 +370,19 @@ function updateRecordingLinks() {
     button.classList.toggle("on", !!rec?.recording);
     button.textContent = rec?.recording ? "● Recording · Stop recording" : "Start recording";
   });
+  document.querySelectorAll(".recordings-waiting").forEach((holder) => {
+    const waiting = rec?.available ? rec.waiting || [] : [];
+    holder.replaceChildren(...waiting.map((name) =>
+      el("button", { class: "linkish waiting-link", type: "button", onclick: () => downloadRecording(name) },
+        `Recording from ${name.slice(0, 10)} ${name.slice(11, 16).replace("-", ":")} is on the robot · Download`)));
+  });
 }
 
 function recordingLink() {
   const button = el("button", { class: "linkish recording-link", type: "button", hidden: true, onclick: toggleRecording }, "Start recording");
+  const waiting = el("span", { class: "recordings-waiting" });
   queueMicrotask(updateRecordingLinks);
-  return button;
+  return [button, waiting];
 }
 
 async function loadState() {
@@ -906,8 +945,9 @@ const handlers = {
   "workshop.recording": ({ start }) => {
     if (start === true && !demo.recording) demo.recording = new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "-");
     if (start === false) demo.recording = null;
-    return { available: true, recording: !!demo.recording, folder: demo.recording };
+    return { available: true, recording: !!demo.recording, folder: demo.recording, waiting: [] };
   },
+  "workshop.recording_downloaded": () => ({ available: true, recording: !!demo.recording, folder: demo.recording, waiting: [], matched: true, deleted: true }),
   "workshop.annotate": ({ group, version, note, label }) => {
     const v = history(group).versions.find((x) => x.number === version);
     if (note != null) v.note = String(note).trim();

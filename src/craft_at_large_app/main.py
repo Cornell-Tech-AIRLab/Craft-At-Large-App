@@ -246,6 +246,7 @@ def run(
             response.headers["Cache-Control"] = "no-store"
             return response
 
+    from craft_at_large_app.config import PROJECT_ROOT, _is_source_checkout_root
     from craft_at_large_app.workshop import saved_work_directory
     from craft_at_large_app.session_recorder import RecordingController, recordings_directory
 
@@ -255,6 +256,9 @@ def run(
         saved_work_directory(recording_base),
         robot,
         camera_allowed=lambda: not args.no_camera,
+        # Running from the project folder (a laptop) keeps recordings; an installed copy (the robot) deletes them
+        # once a laptop has downloaded them.
+        delete_after_download=not _is_source_checkout_root(PROJECT_ROOT),
     )
     if getattr(args, "record", False):
         recorder.start()
@@ -421,6 +425,10 @@ class CraftAtLargeApp(ReachyMiniApp):  # type: ignore[misc]
         """Start preloading heavy imports before the robot/media init in wrapped_run."""
         start_import_warmup()
         super().__init__(*args, **kwargs)
+        if self.settings_app is not None:
+            from craft_at_large_app.workshop_routes import add_starting_page
+
+            add_starting_page(self.settings_app)
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         """Run the Reachy Mini conversation app."""

@@ -1,6 +1,7 @@
 """JSON-RPC methods and pages for the participant workshop editor."""
 
 import asyncio
+import hashlib
 import logging
 from typing import Any
 from pathlib import Path
@@ -63,6 +64,33 @@ def _int_param(params: dict[str, Any], name: str) -> int:
     return value
 
 
+STARTING_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="3">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Getting the robot ready</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#233160;color:#fff;
+font:22px/1.5 "Helvetica Neue",Arial,sans-serif;text-align:center}p{margin:6px;opacity:.85;font-size:18px}</style>
+</head><body><div><h1>Getting the robot ready…</h1><p>This page opens by itself in a few seconds.</p></div></body></html>"""
+
+
+def _drop_route(settings_app: FastAPI, path: str) -> None:
+    settings_app.router.routes[:] = [
+        route for route in settings_app.router.routes if getattr(route, "path", None) != path
+    ]
+
+
+def add_starting_page(settings_app: FastAPI) -> None:
+    """Serve a self-refreshing "Getting the robot ready" page at /workshop until the real page is registered.
+
+    The robot's app runner starts the web server before the app has connected, so without this the
+    first visit to /workshop can return Not Found.
+    """
+    from fastapi.responses import HTMLResponse
+
+    @settings_app.get("/workshop")
+    def _starting() -> HTMLResponse:
+        return HTMLResponse(STARTING_PAGE, headers={"Cache-Control": "no-store"})
+
+
 def register_workshop_methods(
     rpc: JsonRpcServer,
     settings_app: FastAPI,
@@ -80,6 +108,8 @@ def register_workshop_methods(
     """
     store = WorkshopStore(saved_work or instance_path, legacy_file=instance_path / VERSIONS_FILENAME)
     page = Path(__file__).parent / "static" / "workshop.html"
+
+    _drop_route(settings_app, "/workshop")
 
     @settings_app.get("/workshop")
     def _workshop_page() -> FileResponse:
@@ -265,6 +295,39 @@ def register_workshop_methods(
             status = recording.status()
         return {"available": True, **status}
 
+    @settings_app.get("/workshop/recordings/{name}.zip")
+    def _recording_zip(name: str) -> Response:
+        if recording is None:
+            return Response(status_code=404)
+        try:
+            data = recording.session_zip(name)
+        except LookupError:
+            return Response(status_code=404)
+        return Response(
+            content=data,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="craft_at_large_recording_{name}.zip"',
+                "X-Content-SHA256": hashlib.sha256(data).hexdigest(),
+                "Cache-Control": "no-store",
+            },
+        )
+
+    async def _recording_downloaded(params: dict[str, Any]) -> dict[str, Any]:
+        """Delete a session from the robot once the page reports it received the whole zip."""
+        if recording is None:
+            raise JsonRpcError("Recording is not available", reason="recording_unavailable", code=-32000)
+        size = params.get("size")
+        digest = params.get("sha256")
+        if not isinstance(size, int) or not isinstance(digest, str):
+            raise JsonRpcError("size and sha256 are required", reason="invalid_params", code=-32602)
+        try:
+            result = await asyncio.to_thread(recording.downloaded, str(params.get("session", "")), size, digest)
+        except LookupError as exc:
+            raise JsonRpcError("That recording is not on the robot", reason="unknown_recording", code=-32000) from exc
+        return {"available": True, **result, **recording.status()}
+
     rpc.register("workshop.volume", _volume)
+    rpc.register("workshop.recording_downloaded", _recording_downloaded)
     rpc.register("workshop.recording", _recording)
     rpc.register("workshop.delete", _delete)

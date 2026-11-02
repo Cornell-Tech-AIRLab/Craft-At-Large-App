@@ -408,3 +408,20 @@ def test_volume_is_unavailable_without_a_robot(groups: Path, monkeypatch: pytest
     monkeypatch.setattr(routes, "daemon_request", unreachable)
     client = _client(groups, AsyncMock(), robot=MagicMock())
     assert _rpc(client, "workshop.volume", {"level": 50})["result"] == {"available": False, "volume": None}
+
+
+def test_starting_page_is_replaced_once_the_app_is_ready(groups: Path) -> None:
+    """Before the app has started, /workshop says the robot is getting ready; afterwards it is the real page."""
+    from craft_at_large_app.workshop_routes import add_starting_page
+
+    app = FastAPI()
+    add_starting_page(app)
+    client = TestClient(app)
+    early = client.get("/workshop")
+    assert early.status_code == 200
+    assert "Getting the robot ready" in early.text
+
+    rpc = JsonRpcServer()
+    ops = build_personality_ops(MagicMock(), lambda: None)
+    register_workshop_methods(rpc, app, ops, instance_path=groups)
+    assert "Craft@Large Robot Studio" in client.get("/workshop").text

@@ -1,126 +1,52 @@
 <!doctype html>
 <html lang="en">
-
 <head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<meta name="description" content="Realtime voice, vision, motion, personalities, and MCP tools for Reachy Mini." />
-	<title>Craft@Large Robot Studio</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet">
-	<link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Craft@Large Robot Studio</title>
+  <style>
+    @font-face { font-family: "Atkinson Hyperlegible"; font-weight: 400; src: url("src/craft_at_large_app/static/fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Atkinson Hyperlegible"; font-weight: 700; src: url("src/craft_at_large_app/static/fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2"); }
+    :root { --indigo: #233160; --denim: #e9ecf5; --ink: #1d2233; --ink-soft: #5b6075; --line: #c9cedd; --thread: #b8322a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 18px/1.6 "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: #fff; }
+    header { background: var(--indigo) repeating-linear-gradient(90deg, rgba(255,255,255,.8) 0 12px, transparent 12px 20px) no-repeat 0 calc(100% - 10px) / 100% 2px; color: #fff; padding: 48px 24px 56px; }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    h1 { margin: 0; font-size: 40px; line-height: 1.15; }
+    header p { margin: 12px 0 0; font-size: 20px; color: rgba(255,255,255,.9); max-width: 36em; }
+    main { padding: 40px 24px 56px; }
+    h2 { font-size: 24px; color: var(--indigo); margin: 40px 0 8px; }
+    .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 16px; }
+    figure { margin: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    figure img { display: block; width: 100%; height: 220px; object-fit: contain; background: #fff; }
+    figcaption { padding: 10px 14px; background: var(--denim); font-weight: 700; color: var(--indigo); box-shadow: inset 4px 0 0 var(--thread); }
+    ol { padding-left: 1.3em; } li { margin: 6px 0; }
+    code { background: var(--denim); padding: 1px 6px; border-radius: 3px; font-size: 16px; }
+    .note { color: var(--ink-soft); font-size: 16px; }
+  </style>
 </head>
-
 <body>
-	<header class="hero">
-		<div class="topline">
-			<div class="brand">
-				<span class="logo">🤖</span>
-				<span class="brand-name">Reachy Mini</span>
-			</div>
-			<div class="pill">Realtime voice · Tool-aware personalities · Expressive motion</div>
-		</div>
-		<div class="hero-grid">
-			<div class="hero-copy">
-				<p class="eyebrow">Craft@Large Robot Studio</p>
-				<h1>Talk, see, and move together.</h1>
-				<p class="lede">
-					A camera-aware companion for Reachy Mini. Talk naturally, switch personalities, choose their tools, and add MCP Tool Spaces from a clean web UI.
-				</p>
-				<div class="hero-actions">
-					<a class="btn primary" href="#highlights">Explore features</a>
-					<a class="btn ghost" href="https://github.com/pollen-robotics/craft_at_large_app" target="_blank" rel="noopener">View source &amp; setup</a>
-				</div>
-				<div class="hero-badges">
-					<span>Low-latency voice loop</span>
-					<span>Camera insights on demand</span>
-					<span>Choreographed dances &amp; emotions</span>
-					<span>Per-personality tools &amp; MCP Spaces</span>
-				</div>
-			</div>
-			<div class="hero-visual">
-				<div class="glass-card">
-					<img src="docs/assets/reachy_mini_dance.gif" alt="Reachy Mini dancing" class="hero-gif">
-					<p class="caption">Reachy Mini can move, dance, and emote while holding a natural conversation.</p>
-				</div>
-			</div>
-		</div>
-	</header>
+  <header>
+    <div class="wrap">
+      <h1>Craft@Large Robot Studio</h1>
+      <p>A Reachy Mini app for crafting circles. Each group writes how its robot should act, picks a voice and movements, saves versions, and tries them on the robot.</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <h2>The groups</h2>
+    <div class="groups">
+      <figure><img src="profiles/craft_group_a/photo.png" alt="Crafty Carl, the robot"><figcaption>Crafty Carl</figcaption></figure>
+      <figure><img src="profiles/craft_group_b/photo.png" alt="OS-10, the robot"><figcaption>OS-10</figcaption></figure>
+      <figure><img src="profiles/craft_group_c/photo.png" alt="Reesy The Great, the robot"><figcaption>Reesy The Great</figcaption></figure>
+    </div>
 
-	<section id="highlights" class="section features">
-		<div class="section-header">
-			<p class="eyebrow">What’s inside</p>
-			<h2>All-in-one conversational layer for your robot</h2>
-			<p class="intro">
-				The app blends realtime speech, vision, tools, and motion so Reachy Mini feels present.
-			</p>
-		</div>
-		<div class="feature-grid">
-			<div class="feature-card">
-				<span class="icon">🎤</span>
-				<h3>Natural voice chat</h3>
-				<p>Talk freely and get fast, high-quality replies powered by realtime models.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">🎥</span>
-				<h3>Vision-aware replies</h3>
-				<p>Ask the camera tool to see what’s in front, track a face, or keep attention on whoever is speaking.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">💃</span>
-				<h3>Expressive motion</h3>
-				<p>Queue dances, play recorded emotions while Reachy listens and talks.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">🧠</span>
-				<h3>Personalities on demand</h3>
-				<p>Switch conversation styles and choose exactly which built-in or remote tools each personality can use.</p>
-			</div>
-			<div class="feature-card">
-				<span class="icon">🌐</span>
-				<h3>MCP Tool Spaces</h3>
-				<p>Install compatible Hugging Face Spaces once, then grant their tools independently to each personality.</p>
-			</div>
-		</div>
-	</section>
-
-	<section id="story" class="section story">
-		<div class="story-grid">
-			<div class="story-card">
-				<p class="eyebrow">How it feels</p>
-				<h3>From hello to helpful in seconds</h3>
-				<ul class="story-list">
-					<li><span>👋</span> Open the app and start chatting—Reachy greets you in character.</li>
-					<li><span>👀</span> Ask what it sees; it can peek through the camera or keep focus on your face.</li>
-					<li><span>🎭</span> Trigger emotions or dance breaks to keep the conversation lively.</li>
-					<li><span>📝</span> Follow along with live transcripts in the web UI or run audio-only from the console.</li>
-				</ul>
-			</div>
-			<div class="story-card secondary">
-				<p class="eyebrow">Where it shines</p>
-				<h3>Great for demos, teaching, and playful exploration</h3>
-				<p class="story-text">
-					Show off how Reachy Mini listens, responds, and moves in sync. Whether you’re guiding a class, hosting a booth, or experimenting at home, the app keeps the robot expressive without juggling scripts or joystick controls.
-				</p>
-				<div class="chips">
-					<span class="chip">Live conversation</span>
-					<span class="chip">Face tracking</span>
-					<span class="chip">Camera tool</span>
-					<span class="chip">Dance library</span>
-					<span class="chip">Profiles &amp; Tool Spaces</span>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<footer class="footer">
-		<p>
-			Reachy Mini Conversation App by <a href="https://github.com/pollen-robotics" target="_blank" rel="noopener">Pollen Robotics</a>.
-			Explore more apps on <a href="https://huggingface.co/spaces/pollen-robotics/Reachy_Mini_Apps" target="_blank" rel="noopener">Hugging Face Spaces</a>.
-		</p>
-	</footer>
-
+    <h2>Using it on a robot</h2>
+    <ol>
+      <li>Sign the robot in to Hugging Face with an account that can see this Space.</li>
+      <li>Install <strong>Craft@Large Robot Studio</strong> from the robot's app list, then start it.</li>
+      <li>On a laptop on the same Wi-Fi, open <code>http://ROBOT-IP:7860/workshop</code> and pick a group.</li>
+    </ol>
+    <p class="note">This page only describes the app. The app itself runs on the robot, and saved work stays on the robot.</p>
+  </main>
 </body>
-
 </html>

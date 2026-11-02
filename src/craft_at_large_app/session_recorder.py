@@ -11,10 +11,15 @@ Nothing here is sent anywhere; it stays on the laptop.
 """
 
 from __future__ import annotations
+import io
 import os
+import re
 import csv
 import json
+import shutil
+import hashlib
 import logging
+import zipfile
 import threading
 from typing import Any
 from pathlib import Path
@@ -33,6 +38,24 @@ PHOTO_SECONDS_ENV = "CRAFT_PHOTO_SECONDS"
 DEFAULT_PHOTO_SECONDS = 300.0
 TRANSCRIPT_FIELDS = ["time_utc", "group", "version", "speaker", "text"]
 SPEAKERS = {"user": "participant", "assistant": "robot"}
+SESSION_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
+# Fixed timestamp inside the zip so the same folder always gives the same bytes.
+ZIP_DATE = (2020, 1, 1, 0, 0, 0)
+
+
+class SessionNotFound(LookupError):
+    """Raised for a session name that is not a finished session folder."""
+
+
+def zip_folder(folder: Path) -> bytes:
+    """Zip a session folder into bytes, the same bytes every time for the same files."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+            info = zipfile.ZipInfo(f"{folder.name}/{path.relative_to(folder).as_posix()}", ZIP_DATE)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, path.read_bytes())
+    return buffer.getvalue()
 
 
 def recordings_directory(instance_path: Path | None) -> Path:
@@ -156,8 +179,15 @@ class RecordingController:
         *,
         photo_interval_s: float | None = None,
         camera_allowed: Callable[[], bool] = lambda: True,
+        delete_after_download: bool = False,
     ) -> None:
-        """Prepare recording into ``recordings_dir``; nothing is recorded until ``start``."""
+        """Prepare recording into ``recordings_dir``; nothing is recorded until ``start``.
+
+        With ``delete_after_download`` (the app runs on the robot), a session folder is deleted once a
+        laptop has downloaded all of it, so recordings do not stay on the robot.
+        """
+        self._delete_after_download = delete_after_download
+        self._thread: threading.Thread | None = None
         self._recordings_dir = recordings_dir
         self._saved_work = saved_work
         self._robot = robot
@@ -174,7 +204,47 @@ class RecordingController:
             "recording": recorder is not None,
             "folder": recorder.session_dir.name if recorder else None,
             "photo_interval_s": self._photo_interval_s,
+            "delete_after_download": self._delete_after_download,
+            "waiting": self.waiting_sessions() if self._delete_after_download else [],
         }
+
+    def waiting_sessions(self) -> list[str]:
+        """Finished session folders still on this device, oldest first."""
+        if not self._recordings_dir.is_dir():
+            return []
+        active = self._recorder.session_dir.name if self._recorder else None
+        return sorted(
+            p.name
+            for p in self._recordings_dir.iterdir()
+            if p.is_dir() and SESSION_NAME.match(p.name) and p.name != active
+        )
+
+    def _finished_folder(self, name: str) -> Path:
+        if not SESSION_NAME.match(name or ""):
+            raise SessionNotFound(name)
+        active = self._recorder.session_dir.name if self._recorder else None
+        folder = self._recordings_dir / name
+        if name == active or not folder.is_dir():
+            raise SessionNotFound(name)
+        return folder
+
+    def session_zip(self, name: str) -> bytes:
+        """Return a finished session as zip bytes."""
+        return zip_folder(self._finished_folder(name))
+
+    def downloaded(self, name: str, size: int, sha256: str) -> dict[str, Any]:
+        """Record that a laptop received a session's zip; delete it here if it matches exactly."""
+        folder = self._finished_folder(name)
+        data = zip_folder(folder)
+        matches = len(data) == size and hashlib.sha256(data).hexdigest() == sha256
+        deleted = False
+        if matches and self._delete_after_download:
+            shutil.rmtree(folder)
+            deleted = True
+            logger.info("Deleted recording %s after it was downloaded", name)
+        elif not matches:
+            logger.warning("Kept recording %s: the downloaded copy did not match", name)
+        return {"matched": matches, "deleted": deleted}
 
     def start(self) -> dict[str, Any]:
         """Start a new session folder and photo timer; does nothing if already recording."""
@@ -182,13 +252,14 @@ class RecordingController:
             if self._recorder is None:
                 recorder = SessionRecorder(self._recordings_dir, self._saved_work, self._photo_interval_s)
                 stop = threading.Event()
-                threading.Thread(
+                thread = threading.Thread(
                     target=recorder.run_photos,
                     args=(self._robot, stop, self._camera_allowed),
                     name="session-photos",
                     daemon=True,
-                ).start()
-                self._recorder, self._stop = recorder, stop
+                )
+                thread.start()
+                self._recorder, self._stop, self._thread = recorder, stop, thread
         return self.status()
 
     def stop(self) -> dict[str, Any]:
@@ -196,9 +267,12 @@ class RecordingController:
         with self._lock:
             if self._stop is not None:
                 self._stop.set()
+            if self._thread is not None:
+                # Let a photo that is being saved finish, so the zip is complete.
+                self._thread.join(timeout=5)
             if self._recorder is not None:
                 logger.info("Stopped recording %s", self._recorder.session_dir)
-            self._recorder, self._stop = None, None
+            self._recorder, self._stop, self._thread = None, None, None
         return self.status()
 
     def record_transcript(self, role: str, text: str) -> None:

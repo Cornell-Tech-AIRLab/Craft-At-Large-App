@@ -1,6 +1,10 @@
 # Macro for all binary files that should use Git LFS.
 [attr]lfs -text filter=lfs diff=lfs merge=lfs
 
+# Fonts
+*.woff2 lfs
+*.woff lfs
+
 # Image
 *.jpg lfs
 *.jpeg lfs

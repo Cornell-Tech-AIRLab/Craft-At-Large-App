@@ -1,3 +1,16 @@
+---
+title: Craft@Large Robot Studio
+emoji: 🧵
+colorFrom: red
+colorTo: yellow
+sdk: static
+pinned: false
+short_description: Workshop groups edit and version Reachy Mini's personality
+tags:
+ - reachy_mini
+ - reachy_mini_python_app
+---
+
 # Craft@Large Robot Studio
 
 A web page where Craft@Large groups write their robot's one-liners, pick a voice and abilities, save versions, and try them on a Reachy Mini. Built on Pollen Robotics' Reachy Mini conversation app.
@@ -80,7 +93,7 @@ Put the settings in front of the command, for example `CRAFT_PHOTO_SECONDS=60 cr
 ## Where things are saved
 
 - `saved_work/` holds each group's versions.
-- `recordings/` holds transcripts and photos.
+- `recordings/` holds transcripts and photos. Clicking "Stop recording" also downloads the session as a zip to the laptop. When the app runs on the robot, the robot deletes its copy once the zip has fully downloaded.
 - `profiles/craft_group_*/` holds each group's Default prompt (`profile.md`), name (`name.txt`) and card photo (`photo.png`).
 
 `saved_work/` and `recordings/` contain participant data. They stay on the laptop and are not uploaded to GitHub.

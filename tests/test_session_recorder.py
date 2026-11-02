@@ -135,3 +135,104 @@ def test_photo_interval_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     assert photo_interval_seconds() == 300
     monkeypatch.setenv("CRAFT_PHOTO_SECONDS", "0")
     assert photo_interval_seconds() == 0
+
+
+def _finished_session(tmp_path: Path, saved: Path, *, delete: bool) -> tuple[RecordingController, str]:
+    controller = RecordingController(
+        tmp_path / "recordings", saved, MagicMock(), photo_interval_s=0, delete_after_download=delete
+    )
+    name = controller.start()["folder"]
+    controller.record_transcript("user", "Hello robot.")
+    controller.stop()
+    return controller, name
+
+
+def test_robot_deletes_a_session_once_the_whole_zip_was_downloaded(tmp_path: Path, group_a_live: Path) -> None:
+    """On the robot, a session is listed as waiting, zipped, and deleted only after a matching download."""
+    import io
+    import hashlib
+    import zipfile
+
+    controller, name = _finished_session(tmp_path, group_a_live, delete=True)
+    assert controller.status()["waiting"] == [name]
+
+    data = controller.session_zip(name)
+    assert data == controller.session_zip(name)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert f"{name}/transcript.csv" in archive.namelist()
+
+    assert controller.downloaded(name, len(data) - 1, hashlib.sha256(data).hexdigest()) == {
+        "matched": False,
+        "deleted": False,
+    }
+    assert (tmp_path / "recordings" / name).is_dir()
+
+    assert controller.downloaded(name, len(data), hashlib.sha256(data).hexdigest())["deleted"] is True
+    assert not (tmp_path / "recordings" / name).exists()
+    assert controller.status()["waiting"] == []
+
+
+def test_laptop_keeps_sessions_after_download(tmp_path: Path, group_a_live: Path) -> None:
+    """Running from the project folder, recordings stay in recordings/ after a download."""
+    import hashlib
+
+    controller, name = _finished_session(tmp_path, group_a_live, delete=False)
+    data = controller.session_zip(name)
+    assert controller.downloaded(name, len(data), hashlib.sha256(data).hexdigest()) == {
+        "matched": True,
+        "deleted": False,
+    }
+    assert (tmp_path / "recordings" / name).is_dir()
+    assert controller.status()["waiting"] == []
+
+
+def test_active_or_unknown_sessions_cannot_be_downloaded(tmp_path: Path, group_a_live: Path) -> None:
+    """The session being recorded, and names outside recordings/, are refused."""
+    from craft_at_large_app.session_recorder import SessionNotFound
+
+    controller = RecordingController(tmp_path / "recordings", group_a_live, MagicMock(), photo_interval_s=0)
+    active = controller.start()["folder"]
+    for name in (active, "../saved_work", "2026-01-01_00-00-00"):
+        with pytest.raises(SessionNotFound):
+            controller.session_zip(name)
+    controller.stop()
+
+
+def test_zip_route_and_downloaded_method(tmp_path: Path, group_a_live: Path) -> None:
+    """The page fetches the zip with its checksum, then reports it back so the robot can delete it."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from reachy_mini.apps.jsonrpc_server import JsonRpcServer
+    from craft_at_large_app.workshop_routes import register_workshop_methods
+    from craft_at_large_app.personality_routes import build_personality_ops
+
+    controller, name = _finished_session(tmp_path, group_a_live, delete=True)
+    app, rpc = FastAPI(), JsonRpcServer()
+    register_workshop_methods(
+        rpc, app, build_personality_ops(MagicMock(), lambda: None), instance_path=tmp_path, recording=controller
+    )
+    rpc.mount(app)
+    client = TestClient(app)
+
+    response = client.get(f"/workshop/recordings/{name}.zip")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert client.get("/workshop/recordings/nope.zip").status_code == 404
+
+    with client.websocket_connect("/rpc") as ws:
+        ws.send_json(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "workshop.recording_downloaded",
+                "params": {
+                    "session": name,
+                    "size": len(response.content),
+                    "sha256": response.headers["x-content-sha256"],
+                },
+            }
+        )
+        result = ws.receive_json()["result"]
+    assert result["deleted"] is True and result["available"] is True
+    assert client.get(f"/workshop/recordings/{name}.zip").status_code == 404
