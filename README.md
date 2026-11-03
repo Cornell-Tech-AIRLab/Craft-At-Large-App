@@ -1,16 +1,3 @@
----
-title: Craft@Large Robot Studio
-emoji: 🧵
-colorFrom: red
-colorTo: yellow
-sdk: static
-pinned: false
-short_description: Workshop groups edit and version Reachy Mini's personality
-tags:
- - reachy_mini
- - reachy_mini_python_app
----
-
 # Craft@Large Robot Studio
 
 A web page where Craft@Large groups write their robot's one-liners, pick a voice and abilities, save versions, and try them on a Reachy Mini. Built on Pollen Robotics' Reachy Mini conversation app.
