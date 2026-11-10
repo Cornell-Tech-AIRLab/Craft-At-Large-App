@@ -86,13 +86,25 @@ Then open http://localhost:7861/workshop. "Try on robot" only pretends.
 | `--record` | Start recording when the app starts (or use "Start recording" at the bottom of the page) |
 | `--no-camera` | Turn the camera off, including recording photos |
 | `CRAFT_PHOTO_SECONDS=60` | Seconds between recording photos (default 300, `0` for none) |
+| `CRAFT_REMEMBER_CONVERSATIONS=0` | Stop remembering conversations between sessions (on by default) |
+| `CRAFT_SEMANTIC_MEMORY=0` | Search memory by words only, without the local sentence model |
+| `CRAFT_KEEP_TALKING=0` | Let background talk interrupt and quiet the robot again (Pollen's original behavior) |
 | `CRAFT_SILENCE_SECONDS=20` | Seconds of quiet before the robot is told the room is quiet (default 30, `0` for off) |
 
 Put the settings in front of the command, for example `CRAFT_PHOTO_SECONDS=60 craft-at-large-app --ui --robot-host 192.168.1.42`.
 
+## Check memory search (once per laptop)
+
+The robot's memory search uses a small sentence model (about 90 MB) that downloads the first time. To download it and check it works:
+
+```bash
+python -m craft_at_large_app.memory_search --check
+```
+
 ## Where things are saved
 
 - `saved_work/` holds each group's versions.
+- `saved_work/conversations/` and `saved_work/stories/` hold what each group's robot remembers.
 - `recordings/` holds transcripts and photos. Clicking "Stop recording" also downloads the session as a zip to the laptop. When the app runs on the robot, the robot deletes its copy once the zip has fully downloaded.
 - `profiles/craft_group_*/` holds each group's Default prompt (`profile.md`), name (`name.txt`) and card photo (`photo.png`).
 

@@ -12,7 +12,13 @@ from pathlib import Path
 from datetime import datetime, timezone
 from dataclasses import field, asdict, dataclass
 
-from craft_at_large_app.config import PROJECT_ROOT, config, get_available_voices, _is_source_checkout_root
+from craft_at_large_app.config import (
+    PROJECT_ROOT,
+    HF_SPEECH_LANGUAGES,
+    config,
+    get_available_voices,
+    _is_source_checkout_root,
+)
 from craft_at_large_app.profile_store import ProfileFormatError, list_profile_names, read_profile_from_directory
 
 
@@ -34,7 +40,7 @@ DEFAULT_ROBOT_NAME = "Reachy Mini"
 RULES_PATH = Path(__file__).parent / "workshop_rules.md"
 
 # Tools every version keeps so the robot can idle politely and adjust its volume.
-ALWAYS_ON_TOOLS = ("idle_do_nothing", "volume_control")
+ALWAYS_ON_TOOLS = ("idle_do_nothing", "volume_control", "remember_story", "look_back")
 
 
 class Movement(TypedDict):
@@ -53,13 +59,62 @@ MOVEMENTS: list[Movement] = [
     {"id": "look_around", "label": "Look around the room", "tools": ["sweep_look"]},
     {"id": "dance", "label": "Dance", "tools": ["dance", "stop_dance"]},
     {"id": "camera", "label": "Use the camera to look at things", "tools": ["camera"]},
-    {"id": "remember", "label": "Remember what people tell it", "tools": ["remember", "forget"]},
     {"id": "status", "label": "Answer questions about itself (Wi-Fi, software, head tilt)", "tools": ["robot_status"]},
     {"id": "tasks", "label": "Check on or stop something it is doing", "tools": ["task_status", "task_cancel"]},
     # Puts the robot to sleep and stops the app; someone has to start the app again.
     {"id": "sleep", "label": "Go to sleep and turn off when asked", "tools": ["go_to_sleep"]},
 ]
 _MOVEMENT_TOOLS = {tool for movement in MOVEMENTS for tool in movement["tools"]}
+
+# "Design for everyone": how fast the robot talks. The sentence replaces {pace_rule} in the shared rules.
+PACES: dict[str, dict[str, str]] = {
+    "slower": {
+        "label": "Slower",
+        "rule": "Speak very slowly and clearly, with a short pause between sentences, and repeat important words.",
+    },
+    "slow": {"label": "Slow", "rule": "Speak slowly, warmly, and simply."},
+    "natural": {"label": "Natural", "rule": "Speak at a natural pace, warmly and simply."},
+}
+DEFAULT_PACE = "slow"
+# "" keeps the app's default language; "auto" answers in the language each person uses.
+AUTO_LANGUAGE = "auto"
+AUTO_LANGUAGE_RULE = (
+    "Answer each person in the language they speak to you. If people in the circle use different "
+    "languages, help them understand each other."
+)
+
+
+class Scenario(TypedDict):
+    """A fictional circle member that groups design for in the "Design for everyone" activity."""
+
+    id: str
+    name: str
+    about: str
+    think: str
+
+
+SCENARIOS: list[Scenario] = [
+    {"id": "rosa", "name": "Rosa", "about": "Speaks mostly Spanish and understands some English.",
+     "think": "Which language should the robot use with her, and with the rest of the circle?"},
+    {"id": "mei", "name": "Mei", "about": "Speaks Chinese. Her daughter often translates for her.",
+     "think": "How can the robot include Mei directly, not only through her daughter?"},
+    {"id": "walter", "name": "Walter", "about": "Is hard of hearing and misses quiet or fast speech.",
+     "think": "How can the robot make sure Walter heard it?"},
+    {"id": "june", "name": "June", "about": "Has low vision and can't see small movements like antenna wiggles.",
+     "think": "Which gestures can June notice? What should the robot say out loud?"},
+    {"id": "ahmed", "name": "Ahmed", "about": "Had a stroke and speaks slowly, with long pauses.",
+     "think": "How should the robot wait for him? What if it mishears him?"},
+    {"id": "bea", "name": "Bea", "about": "Forgets what was said a few minutes ago.",
+     "think": "How can the robot help Bea follow along without singling her out?"},
+    {"id": "lou", "name": "Lou", "about": "Prefers not to talk, but likes to take part.",
+     "think": "How can the robot include Lou without putting them on the spot?"},
+]
+_SCENARIO_IDS = {scenario["id"] for scenario in SCENARIOS}
+
+
+def language_choices() -> list[dict[str, str]]:
+    """Languages a group can pick: the speech service's languages, plus answering in each person's language."""
+    return [{"code": choice.code, "name": choice.name, "native": choice.native_name} for choice in HF_SPEECH_LANGUAGES]
 _STORE_LOCK = threading.Lock()
 # Researcher notes in a group profile (<!-- ... -->) are not one-liners.
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -89,6 +144,11 @@ class Version:
     tried_at: list[str] = field(default_factory=list)
     one_liner_names: list[str] = field(default_factory=list)
     voice: str = ""
+    # "Design for everyone": the language code ("" = app default, "auto" = each person's language),
+    # how fast it talks, and which scenario cards the group designed for.
+    language: str = ""
+    pace: str = ""
+    designed_for: list[str] = field(default_factory=list)
     # Set when a group deletes the version. Deleted versions are hidden from the
     # page but kept in the file and the researchers' spreadsheet.
     deleted_at: str = ""
@@ -119,7 +179,9 @@ def _as_sentence(line: str) -> str:
     return line if line[-1] in '.!?"\'' + "\u2026\u201d\u2019" else f"{line}."
 
 
-def robot_instructions(one_liners: str, robot_name: str = DEFAULT_ROBOT_NAME) -> str:
+def robot_instructions(
+    one_liners: str, robot_name: str = DEFAULT_ROBOT_NAME, *, pace: str = DEFAULT_PACE, language: str = ""
+) -> str:
     """Put the shared rules, addressed to the robot by name, ahead of the group's one-liners as one paragraph.
 
     The one-liners together make one description of the robot. Their names are page-only labels for
@@ -127,7 +189,13 @@ def robot_instructions(one_liners: str, robot_name: str = DEFAULT_ROBOT_NAME) ->
     """
     text = " ".join(_as_sentence(line.strip()) for line in one_liners.splitlines() if line.strip())
     try:
-        rules = RULES_PATH.read_text(encoding="utf-8").strip().replace("{robot_name}", robot_name or DEFAULT_ROBOT_NAME)
+        rules = (
+            RULES_PATH.read_text(encoding="utf-8")
+            .strip()
+            .replace("{robot_name}", robot_name or DEFAULT_ROBOT_NAME)
+            .replace("{pace_rule}", PACES.get(pace, PACES[DEFAULT_PACE])["rule"])
+            .replace("{language_rule}\n", f"{AUTO_LANGUAGE_RULE}\n" if language == AUTO_LANGUAGE else "")
+        )
     except OSError as exc:
         logger.warning("Failed to read shared workshop rules: %s", exc)
         return text
@@ -335,6 +403,9 @@ class WorkshopStore:
         based_on: int | None,
         one_liner_names: list[str] | None = None,
         voice: str = "",
+        language: str | None = None,
+        pace: str | None = None,
+        designed_for: list[str] | None = None,
     ) -> Version:
         """Append a new version to a group's history."""
         text = str(instructions or "").strip()
@@ -343,6 +414,13 @@ class WorkshopStore:
         voice = (voice or "").strip()
         if voice and voice not in get_available_voices():
             raise WorkshopError("invalid_voice", f"Unknown voice {voice!r}.")
+        if language not in (None, "", AUTO_LANGUAGE) and language not in {c["code"] for c in language_choices()}:
+            raise WorkshopError("invalid_language", f"Unknown language {language!r}.")
+        if pace not in (None, "") and pace not in PACES:
+            raise WorkshopError("invalid_pace", f"Unknown talking speed {pace!r}.")
+        unknown_scenarios = sorted(set(designed_for or []) - _SCENARIO_IDS)
+        if unknown_scenarios:
+            raise WorkshopError("invalid_scenario", f"Unknown scenario cards: {', '.join(unknown_scenarios)}")
         if len(text) > MAX_INSTRUCTIONS_CHARS:
             raise WorkshopError("instructions_too_long", f"Keep instructions under {MAX_INSTRUCTIONS_CHARS} characters.")
         with _STORE_LOCK:
@@ -363,6 +441,11 @@ class WorkshopStore:
                 based_on=parent.number if parent else None,
                 one_liner_names=names if any(names) else [],
                 voice=voice or (parent.voice if parent else ""),
+                language=(parent.language if parent else "") if language is None else language,
+                pace=(parent.pace if parent else "") if pace is None else pace,
+                designed_for=list(parent.designed_for if parent else [])
+                if designed_for is None
+                else list(dict.fromkeys(designed_for)),
             )
             history.versions.append(version)
             self._write_all(histories)
@@ -427,9 +510,13 @@ class WorkshopStore:
                 "times_tried",
                 "tried_at_utc",
                 "deleted_at_utc",
+                "language",
+                "talking_speed",
+                "designed_for",
             ]
         )
         movement_labels = {movement["id"]: movement["label"] for movement in MOVEMENTS}
+        names_by_id = {scenario["id"]: scenario["name"] for scenario in SCENARIOS}
         for group_id in sorted(histories):
             for version in histories[group_id].versions:
                 writer.writerow(
@@ -449,6 +536,9 @@ class WorkshopStore:
                         len(version.tried_at),
                         "; ".join(version.tried_at),
                         version.deleted_at,
+                        version.language or "default",
+                        PACES.get(version.pace or DEFAULT_PACE, PACES[DEFAULT_PACE])["label"],
+                        "; ".join(names_by_id.get(s, s) for s in version.designed_for),
                     ]
                 )
         return buffer.getvalue()

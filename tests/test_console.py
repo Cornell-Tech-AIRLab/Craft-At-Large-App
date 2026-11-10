@@ -1191,8 +1191,11 @@ def test_rpc_settings_methods() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("confirm", [False, True])
-async def test_paced_playback_changes_gain_and_preserves_or_discards_remaining_audio(confirm: bool) -> None:
+async def test_paced_playback_changes_gain_and_preserves_or_discards_remaining_audio(
+    confirm: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ducking is reversible; clearing invalidates a partially submitted frame."""
+    monkeypatch.setattr(config, "LEVEL_VOICE", False)
     handler = MagicMock()
     handler.paced_playback = True
     handler.playback_pending_frames = 1

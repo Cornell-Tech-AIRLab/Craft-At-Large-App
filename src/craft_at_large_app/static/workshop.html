@@ -44,6 +44,27 @@
   .btn.ghost { border-color: var(--line); color: var(--ink-soft); font-weight: 400; }
   .btn.danger { background: var(--thread); border-color: var(--thread); color: #fff; }
   .delete-btn { margin-left: auto; }
+  .stories { margin-top: 28px; }
+  .memory-label { font-size: 17px; margin: 14px 0 4px; color: var(--indigo); }
+  .memory-convo { padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--paper); line-height: 1.5; }
+  .memory-convo p { margin: 0 0 6px; }
+  .story-list { list-style: none; margin: 8px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .story { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1.5px solid var(--line); border-left: 4px solid var(--thread); border-radius: 4px; background: var(--paper); }
+  .story-text { flex: 1; } .story-text p { margin: 4px 0 0; line-height: 1.5; }
+  .story-teller { color: var(--ink-soft); }
+  .story-forget { flex: none; width: 44px; height: 44px; border: 1.5px solid var(--line); border-radius: 4px; background: none; color: var(--ink-soft); font-size: 24px; line-height: 1; cursor: pointer; }
+  .story-forget:hover { border-color: var(--thread); color: var(--thread); }
+  .activity-steps { margin: 8px 0 20px; padding-left: 1.4em; line-height: 1.6; }
+  .activity-steps li { margin: 4px 0; }
+  .scenario-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .scenario-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .scenario { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--paper); text-align: left; cursor: pointer; font-size: 16px; line-height: 1.4; }
+  .scenario[aria-pressed="true"] { border: 2px solid var(--indigo); background: var(--denim); box-shadow: inset 4px 0 0 var(--thread); }
+  .scenario-name { font-size: 20px; font-weight: 700; color: var(--indigo); }
+  .scenario-think { color: var(--ink-soft); }
+  .access-options { margin-bottom: 8px; }
+  .access-summary { font-size: 16px; color: var(--ink-soft); margin: 4px 0 8px; }
+  .cant-list { margin: 4px 0 12px; padding-left: 1.2em; line-height: 1.6; }
   .btn:disabled { opacity: .5; cursor: wait; }
   .linkish { background: none; border: 0; padding: 4px 0; color: var(--indigo); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 16px; }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
@@ -393,6 +414,11 @@ async function loadState() {
   state.defaultVoice = result.default_voice || state.voices[0] || "";
   state.groups = result.groups;
   state.runningGroup = result.running_group;
+  state.languages = result.languages || [];
+  state.autoLanguage = result.auto_language || "auto";
+  state.paces = result.paces || [];
+  state.defaultPace = result.default_pace || "slow";
+  state.scenarios = result.scenarios || [];
 }
 
 async function openGroup(groupId, { keepDraft = false, activate = false } = {}) {
@@ -401,6 +427,8 @@ async function openGroup(groupId, { keepDraft = false, activate = false } = {}) 
   if (!keepDraft || !state.draft) startDraftFrom(latestVersion());
   renderGroup();
   if (!state.volume) loadVolume();
+  state.stories = null;
+  loadStories();
   if (activate && !state.group.running) await activateGroup();
 }
 
@@ -471,13 +499,16 @@ const SLOTS = [
     ["Playful Icebreaker", "act as a playful icebreaker."]] },
   { key: "trigger", label: "Trigger / Observation", hint: "What should your robot's camera/mic look and listen for?", options: [
     ["15-min round timer", "when the 15-minute round timer ends,"], ["room goes quiet", "when the room goes quiet,"],
-    ["someone asks a question", "when someone asks a question,"], ["2 crafters collaborating", "when 2 crafters are collaborating,"]] },
+    ["someone asks a question", "when someone asks a question,"], ["2 crafters collaborating", "when 2 crafters are collaborating,"],
+    ["someone asks to repeat", "when someone asks you to repeat,"], ["someone speaks another language", "when someone speaks to you in another language,"]] },
   { key: "gesture", label: "Physical Gesture", hint: "How should your robot use its body and movement?", options: [
     ["Attentive head nod", "nod attentively"], ["antenna wiggling", "wiggle your antennas"],
-    ["head tilt like a cat", "tilt your head like a cat"], ["gentle body turning", "gently turn your body"]] },
+    ["head tilt like a cat", "tilt your head like a cat"], ["gentle body turning", "gently turn your body"],
+    ["face the person", "turn to face the person"], ["big, slow movements", "use big, slow movements everyone can see"]] },
   { key: "goal", label: "App Goal", hint: "What key value does this app deliver?", options: [
     ["Keep quilting on schedule", "to keep quilting on schedule."], ["spark discussion on cat sanctuary", "to spark discussion on the cat sanctuary."],
-    ["share sewing tips", "to share sewing tips."], ["cheer team", "to cheer the team on."]] },
+    ["share sewing tips", "to share sewing tips."], ["cheer team", "to cheer the team on."],
+    ["everyone can hear", "so everyone can hear and follow along."], ["include every language", "to include everyone, whatever language they speak."]] },
 ];
 const VOICE_NOTES = {
   Aiden: "English", Ryan: "English", Dylan: "Chinese (Beijing)", Eric: "Chinese (Sichuan)", Ono_Anna: "Japanese",
@@ -488,7 +519,8 @@ const voiceName = (voice) => (voice || "").replace(/_/g, " ");
 function startDraftFrom(version) {
   const lines = splitLines(version.instructions);
   const names = lines.map((_, i) => version.one_liner_names?.[i] || "");
-  state.draft = { basedOn: version.number, liners: lines.length ? lines : [""], names: lines.length ? names : [""], editing: 0, voice: version.voice || state.defaultVoice, movements: [...version.movements], note: "", label: "" };
+  state.draft = { basedOn: version.number, liners: lines.length ? lines : [""], names: lines.length ? names : [""], editing: 0, voice: version.voice || state.defaultVoice, movements: [...version.movements], note: "", label: "",
+    language: version.language || "", pace: version.pace || state.defaultPace, designedFor: [...(version.designed_for || [])] };
 }
 
 /* The researchers' starting version (number 1) is shown as "Default", never "Version 1". */
@@ -538,6 +570,7 @@ function renderGroup() {
   state.tab ||= "edit";
   const tabs = el("nav", { class: "tabs", "aria-label": "Sections" },
     el("button", { class: "tab", "aria-current": state.tab === "edit" ? "page" : null, onclick: () => { state.tab = "edit"; renderGroup(); } }, "Write one-liners"),
+    el("button", { class: "tab", "aria-current": state.tab === "everyone" ? "page" : null, onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Design for everyone"),
     el("button", { class: "tab", "aria-current": state.tab === "versions" ? "page" : null, onclick: () => { state.tab = "versions"; renderGroup(); } },
       `Versions (${group.versions.length})`));
   const onRobot = group.running && group.active_version != null
@@ -552,7 +585,7 @@ function renderGroup() {
       tabs,
       el("div", { class: "spacer" }),
       onRobot),
-    state.tab === "edit" ? renderEditor() : renderHistory());
+    state.tab === "edit" ? renderEditor() : state.tab === "everyone" ? renderEveryone() : renderHistory());
 }
 
 function renderEditor() {
@@ -670,6 +703,9 @@ function renderEditor() {
     el("h3", { class: "settings-label" }, "What can the robot do?"),
     el("p", { class: "hint" }, "Tap to turn on or off."),
     moves,
+    el("h3", { class: "settings-label" }, "Language and talking speed"),
+    el("p", { class: "access-summary" }, `${languageName(draft.language)} · ${paceName(draft.pace)} · `,
+      el("button", { class: "linkish", type: "button", onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Change in Design for everyone")),
     volumeControl());
 
 
@@ -690,6 +726,7 @@ function renderEditor() {
       const result = await rpc("workshop.save", {
         group: state.group.id, instructions, one_liner_names: draft.names, voice: draft.voice, movements: draft.movements,
         note: draft.note, label: draft.label, based_on: draft.basedOn, try: tryIt,
+        language: draft.language, pace: draft.pace, designed_for: draft.designedFor,
       }, 45000);
       const number = result.version.number;
       toast(tryIt ? (result.message || `Saved as version ${number}.`) : `Saved as version ${number}.`, tryIt && !result.applied);
@@ -715,12 +752,179 @@ function renderEditor() {
         settings,
         el("div", { class: "research-links" },
           el("a", { href: "/workshop/export.csv" }, "Download all versions (spreadsheet)"),
+          el("a", { href: "/workshop/stories.csv" }, "Download stories (spreadsheet)"),
           el("a", { href: "/", target: "_blank", rel: "noopener" }, "Full robot controls"),
           recordingLink())),
       el("div", { class: "savebar" },
         el("button", { class: "btn primary", "data-busy": true, onclick: () => save(true) }, "Save and try on robot"),
         el("button", { class: "btn", "data-busy": true, onclick: () => save(false) }, "Save only"))),
     panel);
+}
+
+/* ---------- Design for everyone: multilingual and accessible circles ---------- */
+const languageName = (code) => {
+  if (!code) return "App default language";
+  if (code === state.autoLanguage) return "Each person's language";
+  const found = state.languages.find((l) => l.code === code);
+  return found ? found.name : code;
+};
+const paceName = (id) => (state.paces.find((p) => p.id === (id || state.defaultPace)) || { label: "Slow" }).label + " talking";
+const scenarioName = (id) => (state.scenarios.find((s) => s.id === id) || { name: id }).name;
+const PACE_NOTES = {
+  slower: "Very slow and clear, pauses between sentences, repeats important words",
+  slow: "Slow, warm and simple (the usual setting)",
+  natural: "An everyday conversation pace",
+};
+
+function renderEveryone() {
+  const draft = state.draft;
+  const cards = el("div", { class: "scenario-grid" });
+  const paintCards = () => cards.replaceChildren(...state.scenarios.map((card) => {
+    const on = draft.designedFor.includes(card.id);
+    return el("button", { class: "scenario", type: "button", "aria-pressed": String(on), onclick: () => {
+      draft.designedFor = on ? draft.designedFor.filter((id) => id !== card.id) : [...draft.designedFor, card.id];
+      paintCards();
+    } },
+      el("span", { class: "scenario-name" }, on ? `✓ ${card.name}` : card.name),
+      el("span", { class: "scenario-about" }, card.about),
+      el("span", { class: "scenario-think" }, el("strong", {}, "Think about: "), card.think));
+  }));
+  paintCards();
+  const draw = () => {
+    const shuffled = [...state.scenarios].sort(() => Math.random() - 0.5);
+    draft.designedFor = shuffled.slice(0, 2).map((card) => card.id);
+    paintCards();
+    toast(`Your circle includes ${draft.designedFor.map(scenarioName).join(" and ")}.`);
+  };
+
+  const radioGroup = (label, options, current, onPick) => {
+    const group = el("div", { class: "voices access-options", role: "radiogroup", "aria-label": label });
+    options.forEach(([value, title, note]) => {
+      const button = el("button", { class: "voice", type: "button", role: "radio", "aria-checked": String(current === value) },
+        el("span", { class: "voice-name" }, title), note ? el("span", { class: "voice-note" }, note) : null);
+      button.addEventListener("click", () => {
+        onPick(value);
+        group.querySelectorAll(".voice").forEach((b) => b.setAttribute("aria-checked", String(b === button)));
+      });
+      group.append(button);
+    });
+    return group;
+  };
+  const languages = radioGroup("Language", [
+    ["", "App default", "The language the app was set up with"],
+    [state.autoLanguage, "Each person's language", "Answers in whatever language someone uses"],
+    ...state.languages.map((l) => [l.code, l.name, l.native]),
+  ], draft.language, (value) => { draft.language = value; });
+  const paces = radioGroup("How fast it talks", state.paces.map((p) => [p.id, p.label, PACE_NOTES[p.id] || ""]), draft.pace, (value) => { draft.pace = value; });
+
+  return el("main", { class: "workspace-grid" },
+    el("section", { class: "pane list-pane", "aria-labelledby": "everyone-title" },
+      el("div", { class: "pane-scroll" },
+        el("h2", { class: "pane-title", id: "everyone-title" }, "Design for everyone"),
+        el("p", { class: "hint" }, "People in a crafting circle may speak other languages, hear or see less, or need more time. Design your robot so it works for them too."),
+        el("ol", { class: "activity-steps" },
+          el("li", {}, el("strong", {}, "Pick two people "), "from the cards below, or draw two at random."),
+          el("li", {}, el("strong", {}, "Change your robot "), "so it works for them: its language and talking speed here, and its one-liners."),
+          el("li", {}, el("strong", {}, "Save and try it. "), "Someone in your group acts out each person."),
+          el("li", {}, el("strong", {}, "Talk about it: "), "what worked, and what did the robot get wrong?")),
+        el("div", { class: "scenario-head" },
+          el("h3", { class: "settings-label" }, "Who is in your circle?"),
+          el("button", { class: "btn small", type: "button", onclick: draw }, "Draw two cards")),
+        el("p", { class: "hint" }, "These are made-up people. Tap a card to add or remove them."),
+        cards)),
+    el("section", { class: "pane panel", "aria-labelledby": "access-settings-title" },
+      el("h2", { class: "pane-title", id: "access-settings-title" }, "Robot settings for your circle"),
+      el("h3", { class: "settings-label" }, "Language"),
+      el("p", { class: "hint" }, "With one language picked, the robot listens and speaks only that language."),
+      languages,
+      el("h3", { class: "settings-label" }, "How fast it talks"),
+      paces,
+      el("h3", { class: "settings-label" }, "What the robot can't do"),
+      el("ul", { class: "cant-list" },
+        el("li", {}, "Show words on a screen. It has no screen, so no captions."),
+        el("li", {}, "Understand sign language or hand gestures."),
+        el("li", {}, "Tell who is speaking."),
+        el("li", {}, "Always hear accents, pauses or soft voices correctly.")),
+      el("p", { class: "hint" }, "New formula buttons for this activity are in Write one-liners: “someone asks to repeat”, “someone speaks another language”, “face the person”, “everyone can hear” and more. Your choices here are saved with your next version."),
+      el("div", { class: "actions" },
+        el("button", { class: "btn primary", type: "button", onclick: () => { state.tab = "edit"; renderGroup(); } }, "Write one-liners for them"))));
+}
+
+/* ---------- Stories the group's robot remembers ---------- */
+async function loadStories() {
+  const groupId = state.group?.id;
+  if (!groupId) return;
+  try { state.stories = (await rpc("workshop.stories", { group: groupId })).stories; } catch { state.stories = []; }
+  try { state.conversation = await rpc("workshop.conversation", { group: groupId }); } catch { state.conversation = null; }
+  if (state.group?.id === groupId) paintStories();
+}
+
+function storiesBlock() {
+  const holder = el("div", { class: "stories", id: "stories" });
+  queueMicrotask(paintStories);
+  return holder;
+}
+
+function paintStories() {
+  const holder = document.getElementById("stories");
+  if (!holder || !state.group) return;
+  const stories = state.stories;
+  const convo = state.conversation;
+  holder.replaceChildren(
+    el("h3", { class: "settings-label" }, `What ${state.group.name} remembers`),
+    el("h4", { class: "memory-label" }, "Conversations"),
+    convo && convo.enabled === false ? el("p", { class: "hint" }, "Conversation memory is turned off.")
+      : el("div", { class: "memory-convo" },
+        el("p", {}, convo?.lines
+          ? `It remembers what was said in its conversations with your group (${convo.lines} lines, last on ${when(convo.last_at)}). Next time, it picks up where you left off.`
+          : "Everything said to and by the robot is remembered here, so next time it can pick up where you left off. Nothing yet."),
+        convo?.lines ? el("button", { class: "linkish", type: "button", onclick: confirmClearConversation }, "Clear conversation memory") : null),
+    el("h4", { class: "memory-label" }, "Stories"),
+    el("p", { class: "hint" }, "When someone shares a story, the robot also saves a short summary here. Tap × to make it forget one."),
+    stories == null ? el("p", { class: "hint" }, "Loading…")
+      : stories.length ? el("ul", { class: "story-list" }, ...stories.map((story) =>
+        el("li", { class: "story" },
+          el("div", { class: "story-text" },
+            el("strong", {}, story.title),
+            story.told_by ? el("span", { class: "story-teller" }, ` · told by ${story.told_by}`) : null,
+            el("p", {}, story.story)),
+          el("button", { class: "story-forget", type: "button", "aria-label": `Forget “${story.title}”`, onclick: () => confirmForget(story) }, "×"))))
+      : el("p", { class: "muted" }, "No stories yet."),
+    el("button", { class: "linkish", type: "button", onclick: loadStories }, "Refresh"));
+}
+
+function confirmClearConversation() {
+  dialogBody.replaceChildren(
+    el("h2", { style: "font-size:30px" }, "Clear conversation memory?"),
+    el("p", {}, `${state.group.name} will forget what was said in its earlier conversations with your group. Saved stories stay. This can’t be undone.`),
+    el("div", { class: "actions" },
+      el("button", { class: "btn danger", onclick: async () => {
+        try {
+          state.conversation = await rpc("workshop.clear_conversation", { group: state.group.id });
+          dialog.close();
+          toast("Conversation memory cleared.");
+          paintStories();
+        } catch (error) { showError(error); }
+      } }, "Clear it"),
+      el("button", { class: "btn", onclick: () => dialog.close() }, "Keep it")));
+  dialog.showModal();
+}
+
+function confirmForget(story) {
+  dialogBody.replaceChildren(
+    el("h2", { style: "font-size:30px" }, `Forget “${story.title}”?`),
+    el("p", {}, "The robot won’t remember this story next time. This can’t be undone."),
+    el("div", { class: "actions" },
+      el("button", { class: "btn danger", onclick: async () => {
+        try {
+          await rpc("workshop.forget_story", { group: state.group.id, id: story.id });
+          dialog.close();
+          toast("The robot will forget that story.");
+          await loadStories();
+        } catch (error) { showError(error); }
+      } }, "Forget it"),
+      el("button", { class: "btn", onclick: () => dialog.close() }, "Keep it")));
+  dialog.showModal();
 }
 
 function renderHistory() {
@@ -747,7 +951,8 @@ function renderHistory() {
       el("div", { class: "pane-scroll" },
         el("h2", { class: "pane-title" }, "Versions"),
         el("p", { class: "hint" }, "Newest first. Pick one to see it, try it on the robot, or add a note."),
-        list)),
+        list,
+        storiesBlock())),
     el("section", { class: "pane panel", "aria-label": versionName(selected.number) },
       el("div", { class: "panel-head" },
         el("h2", { class: "panel-title" }, versionName(selected.number)),
@@ -762,7 +967,12 @@ function renderHistory() {
       el("p", { class: "version-settings" },
         el("strong", {}, "Voice: "), voiceName(selected.voice || state.defaultVoice),
         el("span", { class: "dot" }, " · "),
-        el("strong", {}, "Can: "), selected.movements.length ? selected.movements.map(movementLabel).join(", ") : "only talk"),
+        el("strong", {}, "Can: "), selected.movements.length ? selected.movements.map(movementLabel).join(", ") : "only talk",
+        el("br"),
+        el("strong", {}, "Language: "), languageName(selected.language),
+        el("span", { class: "dot" }, " · "),
+        el("strong", {}, "Talking speed: "), paceName(selected.pace),
+        selected.designed_for?.length ? [el("br"), el("strong", {}, "Designed for: "), selected.designed_for.map(scenarioName).join(", ")] : null),
       lines.length ? null : el("p", { class: "muted" }, "No one-liners yet."),
       el("ol", { class: "prompt-lines" }, lines.map((line, i) => el("li", {},
         selected.one_liner_names?.[i] ? el("div", { class: "liner-name" }, selected.one_liner_names[i]) : null,
@@ -798,6 +1008,15 @@ function showDiff(version) {
     el("div", { class: "legend" }, el("span", {}, el("ins", {}, "Green"), " = added"), el("span", {}, el("del", {}, "Red"), " = removed")),
     unchanged ? el("p", {}, "The words are the same.") :
       el("div", { class: "diff" }, parts.map((p) => p.kind === "same" ? p.text : el(p.kind, {}, p.text))),
+    (previous.language || "") !== (version.language || "")
+      ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Language: "), `${languageName(previous.language)} → ${languageName(version.language)}`)
+      : null,
+    (previous.pace || state.defaultPace) !== (version.pace || state.defaultPace)
+      ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Talking speed: "), `${paceName(previous.pace)} → ${paceName(version.pace)}`)
+      : null,
+    (previous.designed_for || []).join() !== (version.designed_for || []).join()
+      ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Designed for: "), (version.designed_for || []).map(scenarioName).join(", ") || "nobody")
+      : null,
     (previous.voice || state.defaultVoice) !== (version.voice || state.defaultVoice)
       ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Voice: "), `${voiceName(previous.voice || state.defaultVoice)} → ${voiceName(version.voice || state.defaultVoice)}`)
       : null,
@@ -857,6 +1076,7 @@ function researchFooter() {
   return el("footer", { class: "research" },
     el("span", {}, "For researchers:"),
     el("a", { href: "/workshop/export.csv" }, "Download all versions (spreadsheet)"),
+          el("a", { href: "/workshop/stories.csv" }, "Download stories (spreadsheet)"),
     el("a", { href: "/", target: "_blank", rel: "noopener" }, "Full robot controls"),
     recordingLink());
 }
@@ -886,13 +1106,14 @@ setInterval(async () => {
 }, 10000);
 
 /* ---------- Preview mode: used when this file is opened directly, with no app running ---------- */
-const DEMO_SEEDS = {"craft_group_a": {"name": "Crafty Carl", "instructions": "", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "idle_do_nothing", "volume_control"]}, "craft_group_b": {"name": "OS-10", "instructions": "OS-10 is a warm facilitator. OS-10 should turn its body away when participants are silent. OS-10 should tilt its head when listening to a question.", "tools": ["move_head", "turn_body", "play_emotion", "stop_emotion", "head_tracking", "dance", "stop_dance", "idle_do_nothing", "volume_control"]}, "craft_group_c": {"name": "Reesy The Great", "instructions": "", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "sweep_look", "idle_do_nothing", "volume_control"]}};
-const DEMO_MOVEMENTS = [{"id": "head", "label": "Move its head (look around, tilt)", "tools": ["move_head"]}, {"id": "turn", "label": "Turn its body (left, right, away)", "tools": ["turn_body"]}, {"id": "emotions", "label": "Show emotions with head and antennas", "tools": ["play_emotion", "stop_emotion"]}, {"id": "follow", "label": "Follow faces with its head", "tools": ["head_tracking"]}, {"id": "look_around", "label": "Look around the room", "tools": ["sweep_look"]}, {"id": "dance", "label": "Dance", "tools": ["dance", "stop_dance"]}, {"id": "camera", "label": "Use the camera to look at things", "tools": ["camera"]}, {"id": "remember", "label": "Remember what people tell it", "tools": ["remember", "forget"]}, {"id": "status", "label": "Answer questions about itself (Wi-Fi, software, head tilt)", "tools": ["robot_status"]}, {"id": "tasks", "label": "Check on or stop something it is doing", "tools": ["task_status", "task_cancel"]}, {"id": "sleep", "label": "Go to sleep and turn off when asked", "tools": ["go_to_sleep"]}];
+const DEMO_SEEDS = {"craft_group_a": {"name": "Crafty Carl", "instructions": "Crafty Carl is a helpful robot which specializes in identifying situations where participants are confused. Crafty Carl then answers questions and fosters participation. Crafty Carl answers these questions by moving its antennas. Crafty Carl is very subtle in its responses and only gently nudges the participants.", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "idle_do_nothing", "volume_control"]}, "craft_group_b": {"name": "OS-10", "instructions": "OS-10 is a warm facilitator. OS-10 should turn its body away when participants are silent. OS-10 should tilt its head when listening to a question.", "tools": ["move_head", "turn_body", "play_emotion", "stop_emotion", "head_tracking", "dance", "stop_dance", "idle_do_nothing", "volume_control"]}, "craft_group_c": {"name": "Reesy The Great", "instructions": "Reesy The Great is a wise and joyful guide for the crafting circle. Reesy only responds when someone calls it by name, “Reesy” or “Reesy The Great.” When someone calls Reesy by name and asks a question that nobody in the circle has an answer for, Reesy dances and moves with joy, then gives its own answer to help the circle keep going.", "tools": ["move_head", "play_emotion", "stop_emotion", "head_tracking", "sweep_look", "dance", "stop_dance", "idle_do_nothing", "volume_control"]}};
+const DEMO_MOVEMENTS = [{"id": "head", "label": "Move its head (look around, tilt)", "tools": ["move_head"]}, {"id": "turn", "label": "Turn its body (left, right, away)", "tools": ["turn_body"]}, {"id": "emotions", "label": "Show emotions with head and antennas", "tools": ["play_emotion", "stop_emotion"]}, {"id": "follow", "label": "Follow faces with its head", "tools": ["head_tracking"]}, {"id": "look_around", "label": "Look around the room", "tools": ["sweep_look"]}, {"id": "dance", "label": "Dance", "tools": ["dance", "stop_dance"]}, {"id": "camera", "label": "Use the camera to look at things", "tools": ["camera"]}, {"id": "status", "label": "Answer questions about itself (Wi-Fi, software, head tilt)", "tools": ["robot_status"]}, {"id": "tasks", "label": "Check on or stop something it is doing", "tools": ["task_status", "task_cancel"]}, {"id": "sleep", "label": "Go to sleep and turn off when asked", "tools": ["go_to_sleep"]}];
 // Opened as a file, the page finds group photos in the project's profiles folder.
 const DEMO_PHOTOS = Object.fromEntries(["craft_group_a", "craft_group_b", "craft_group_c"].map((id) => [id, `../../../profiles/${id}/photo.png`]));
+const DEMO_ACCESS = {"languages": [{"code": "en", "name": "English", "native": "English"}, {"code": "fr", "name": "French", "native": "Français"}, {"code": "es", "name": "Spanish", "native": "Español"}, {"code": "de", "name": "German", "native": "Deutsch"}, {"code": "it", "name": "Italian", "native": "Italiano"}, {"code": "pt", "name": "Portuguese", "native": "Português"}, {"code": "ru", "name": "Russian", "native": "Русский"}, {"code": "zh", "name": "Chinese", "native": "中文"}, {"code": "ja", "name": "Japanese", "native": "日本語"}, {"code": "ko", "name": "Korean", "native": "한국어"}], "auto_language": "auto", "paces": [{"id": "slower", "label": "Slower"}, {"id": "slow", "label": "Slow"}, {"id": "natural", "label": "Natural"}], "default_pace": "slow", "scenarios": [{"id": "rosa", "name": "Rosa", "about": "Speaks mostly Spanish and understands some English.", "think": "Which language should the robot use with her, and with the rest of the circle?"}, {"id": "mei", "name": "Mei", "about": "Speaks Chinese. Her daughter often translates for her.", "think": "How can the robot include Mei directly, not only through her daughter?"}, {"id": "walter", "name": "Walter", "about": "Is hard of hearing and misses quiet or fast speech.", "think": "How can the robot make sure Walter heard it?"}, {"id": "june", "name": "June", "about": "Has low vision and can't see small movements like antenna wiggles.", "think": "Which gestures can June notice? What should the robot say out loud?"}, {"id": "ahmed", "name": "Ahmed", "about": "Had a stroke and speaks slowly, with long pauses.", "think": "How should the robot wait for him? What if it mishears him?"}, {"id": "bea", "name": "Bea", "about": "Forgets what was said a few minutes ago.", "think": "How can the robot help Bea follow along without singling her out?"}, {"id": "lou", "name": "Lou", "about": "Prefers not to talk, but likes to take part.", "think": "How can the robot include Lou without putting them on the spot?"}]};
 const ALWAYS_ON = ["idle_do_nothing", "volume_control"];
 const movementTools = new Set(DEMO_MOVEMENTS.flatMap((m) => m.tools));
-const demo = { groups: {}, running: null, volume: 60 };
+const demo = { groups: {}, running: null, volume: 60, stories: {}, convo: {} };
 const nowIso = () => new Date().toISOString();
 const movementsFor = (tools) => DEMO_MOVEMENTS.filter((m) => m.tools.every((t) => tools.includes(t))).map((m) => m.id);
 const groupName = (id) => DEMO_SEEDS[id]?.name || `Group ${id.replace("craft_group_", "").toUpperCase()}`;
@@ -914,7 +1135,7 @@ function tryIt(id, number) {
 const handlers = {
   "workshop.state": () => ({
     groups: Object.keys(DEMO_SEEDS).map((id) => { const h = history(id); return { id, name: groupName(id), version_count: h.versions.length, active_version: h.active_version, photo: DEMO_PHOTOS[id] || null }; }),
-    movements: DEMO_MOVEMENTS, voices: ["Aiden", "Ryan", "Dylan", "Eric", "Ono_Anna", "Serena", "Sohee", "Uncle_Fu", "Vivian"], default_voice: "Aiden", running_group: demo.running }),
+    movements: DEMO_MOVEMENTS, voices: ["Aiden", "Ryan", "Dylan", "Eric", "Ono_Anna", "Serena", "Sohee", "Uncle_Fu", "Vivian"], default_voice: "Aiden", running_group: demo.running, ...DEMO_ACCESS }),
   "workshop.group": ({ group }) => { const h = history(group); return { id: group, name: groupName(group), active_version: h.active_version, running: demo.running === group, versions: h.versions.map(asJson) }; },
   "workshop.save": (p) => {
     const h = history(p.group);
@@ -926,6 +1147,8 @@ const handlers = {
     const v = { number: Math.max(...h.versions.map((x) => x.number)) + 1, saved_at: nowIso(), author: String(p.author || "").trim(),
       instructions: text, tools, note: String(p.note || "").trim(), label: String(p.label || "").trim(), based_on: parent ? parent.number : null, tried_at: [],
       voice: String(p.voice || (parent ? parent.voice : "") || ""),
+      language: p.language ?? (parent ? parent.language || "" : ""), pace: p.pace ?? (parent ? parent.pace || "" : ""),
+      designed_for: p.designed_for ?? (parent ? parent.designed_for || [] : []),
       one_liner_names: (p.one_liner_names || []).some((n) => String(n).trim()) ? p.one_liner_names.map((n) => String(n).trim()) : [] };
     h.versions.push(v);
     return p.try ? { ...tryIt(p.group, v.number), version: asJson(v) } : { version: asJson(v), applied: false };
@@ -942,6 +1165,12 @@ const handlers = {
     if (level != null) demo.volume = level;
     return { available: true, volume: demo.volume };
   },
+  "workshop.stories": ({ group }) => ({ stories: (demo.stories[group] ||= group === "craft_group_b"
+    ? [{ id: "s1", title: "Grandmother's quilt", story: "Rosa's grandmother sewed a quilt from her children's old dresses. Rosa still keeps it on her bed and is learning to sew one for her own granddaughter.", told_by: "Rosa", saved_at: "2026-11-09T19:00:00+00:00" }]
+    : []) }),
+  "workshop.conversation": ({ group }) => (demo.convo[group] ||= { enabled: true, lines: group === "craft_group_b" ? 46 : 0, last_at: group === "craft_group_b" ? "2026-11-09T19:40:00+00:00" : null }),
+  "workshop.clear_conversation": ({ group }) => (demo.convo[group] = { enabled: true, lines: 0, last_at: null }),
+  "workshop.forget_story": ({ group, id }) => { demo.stories[group] = (demo.stories[group] || []).filter((s) => s.id !== id); return { forgotten: true }; },
   "workshop.recording": ({ start }) => {
     if (start === true && !demo.recording) demo.recording = new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "-");
     if (start === false) demo.recording = null;

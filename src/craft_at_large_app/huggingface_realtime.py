@@ -1,3 +1,4 @@
+import re
 import json
 import math
 import time
@@ -160,6 +161,25 @@ def _build_openai_compatible_client_from_realtime_url(
     return client, parsed.connect_query
 
 
+
+# Short requests that end the robot's speech when background talk is ignored (config.KEEP_TALKING).
+STOP_PHRASES = (
+    "stop", "stop talking", "be quiet", "quiet", "quiet please", "hush", "shh", "shush",
+    "wait", "hold on", "pause", "enough", "that's enough", "okay stop", "ok stop", "please stop",
+)
+_STOP_PATTERN = re.compile(r"^\W*(?:" + "|".join(re.escape(p) for p in sorted(STOP_PHRASES, key=len, reverse=True)) + r")\b")
+
+
+def is_stop_request(transcript: str) -> bool:
+    """Whether a short utterance asks the robot to stop talking, e.g. "Stop!" or "Wait, hold on"."""
+    text = transcript.strip().lower().replace("’", "'")
+    words = re.findall(r"[\w']+", text)
+    if not words or len(words) > 6:
+        return False
+    if _STOP_PATTERN.match(text):
+        return True
+    return any(phrase in text for phrase in ("stop talking", "be quiet", "please stop", "hold on"))
+
 class HuggingFaceRealtimeHandler(ConversationHandler):
     """Realtime stream handler for the Hugging Face OpenAI-compatible endpoint."""
 
@@ -224,6 +244,14 @@ class HuggingFaceRealtimeHandler(ConversationHandler):
         self._audio_response_id: str | None = None
         self._discarded_response_ids: deque[str] = deque(maxlen=32)
         self._playback_interrupted = False
+
+    def _robot_is_speaking(self) -> bool:
+        """Whether the robot's reply is still playing (or queued to play)."""
+        return (
+            self._audio_response_id is not None
+            and not self._playback_interrupted
+            and (self.playback_until > time.monotonic() or self.playback_pending_frames > 0)
+        )
 
     def _set_listening(self, *, local: bool | None = None, server: bool | None = None) -> None:
         if local is not None:
@@ -398,7 +426,7 @@ class HuggingFaceRealtimeHandler(ConversationHandler):
                         model="gpt-4o-transcribe",
                         language=get_session_language(),
                     ),
-                    turn_detection=ServerVad(type="server_vad", interrupt_response=True),
+                    turn_detection=ServerVad(type="server_vad", interrupt_response=not config.KEEP_TALKING),
                 ),
                 output=RealtimeAudioConfigOutputParam(
                     format=_native_rate_audio_pcm(),  # type: ignore[typeddict-item]
@@ -970,7 +998,8 @@ class HuggingFaceRealtimeHandler(ConversationHandler):
                         self._turn_user_done_at = None
                         self._turn_response_created_at = None
                         self._turn_first_audio_at = None
-                        await self._interrupt_playback()
+                        if not (config.KEEP_TALKING and self._robot_is_speaking()):
+                            await self._interrupt_playback()
                         self._set_listening(server=True)
                         logger.debug("User speech started")
 
@@ -1052,6 +1081,10 @@ class HuggingFaceRealtimeHandler(ConversationHandler):
                         if not transcript:
                             logger.debug("Ignoring empty user transcript")
                             continue
+
+                        if config.KEEP_TALKING and self._robot_is_speaking() and is_stop_request(transcript):
+                            logger.info("Stopping speech on request: %r", transcript)
+                            await self._interrupt_playback()
 
                         self._turn_user_done_at = time.perf_counter()
                         self._turn_response_created_at = None
@@ -1257,7 +1290,8 @@ class HuggingFaceRealtimeHandler(ConversationHandler):
             self._set_listening(local=local_speech)
             if self.paced_playback and self._local_vad is not None and not self._playback_interrupted:
                 # Only duck: stopping waits for server VAD, so loud background speech cannot drop the turn.
-                self.playback_gain = 0.25 if detect_barge_in and self._local_vad.barge_in_candidate else 1.0
+                ducking = detect_barge_in and self._local_vad.barge_in_candidate and not config.KEEP_TALKING
+                self.playback_gain = 0.25 if ducking else 1.0
             self._report_vad()
             if local_speech:
                 # Muting or losing the microphone must not leave a stale local vote.

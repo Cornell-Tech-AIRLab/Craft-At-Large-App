@@ -1,5 +1,7 @@
 """JSON-RPC methods and pages for the participant workshop editor."""
 
+import io
+import csv
 import asyncio
 import hashlib
 import logging
@@ -12,9 +14,16 @@ from fastapi.responses import Response, FileResponse
 
 from reachy_mini.io.jsonrpc import JsonRpcError
 from reachy_mini.apps.jsonrpc_server import JsonRpcServer
+from craft_at_large_app import conversation_memory
 from craft_at_large_app.config import USER_PERSONALITIES_DIRNAME, config, get_default_voice, get_available_voices
+from craft_at_large_app.stories import forget_story, list_stories
 from craft_at_large_app.workshop import (
+    PACES,
     MOVEMENTS,
+    SCENARIOS,
+    DEFAULT_PACE,
+    AUTO_LANGUAGE,
+    ALWAYS_ON_TOOLS,
     VERSIONS_FILENAME,
     Version,
     WorkshopError,
@@ -22,6 +31,7 @@ from craft_at_large_app.workshop import (
     list_group_ids,
     group_given_name,
     group_photo_path,
+    language_choices,
     live_profile_name,
     group_display_name,
     robot_instructions,
@@ -30,6 +40,7 @@ from craft_at_large_app.workshop import (
 from craft_at_large_app.daemon_api import DaemonApiError, daemon_request
 from craft_at_large_app.personality import save_user_personality
 from craft_at_large_app.profile_store import ProfileFormatError, read_profile_from_directory
+from craft_at_large_app.settings_store import AppSettings, update_settings, apply_settings_to_runtime
 from craft_at_large_app.personality_routes import RouteError, PersonalityOps
 
 
@@ -55,6 +66,22 @@ def _photo_url(group_id: str) -> str | None:
     if photo is None:
         return None
     return f"/workshop/photos/{group_id}?v={int(photo.stat().st_mtime)}"
+
+
+def _group_param(params: dict[str, Any]) -> str:
+    group_id = str(params.get("group", ""))
+    if group_id not in list_group_ids():
+        raise JsonRpcError(f"Unknown group {group_id!r}", reason="unknown_group", code=-32000)
+    return group_id
+
+
+def _string_list(params: dict[str, Any], name: str) -> list[str] | None:
+    value = params.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise JsonRpcError(f"{name} must be a list of strings", reason="invalid_params", code=-32602)
+    return value
 
 
 def _int_param(params: dict[str, Any], name: str) -> int:
@@ -158,15 +185,24 @@ def register_workshop_methods(
             selection = await asyncio.to_thread(
                 save_user_personality,
                 live_profile_name(group_id),
-                robot_instructions(version.instructions, group_given_name(group_id)),
+                robot_instructions(
+                    version.instructions,
+                    group_given_name(group_id),
+                    pace=version.pace or DEFAULT_PACE,
+                    language=version.language,
+                ),
                 version.voice or seed.voice,
                 seed.greeting,
                 overwrite=True,
-                default_tools=version.tools,
+                default_tools=[*version.tools, *(t for t in ALWAYS_ON_TOOLS if t not in version.tools)],
             )
         except (OSError, ValueError, ProfileFormatError) as exc:
             logger.exception("Failed to write the live profile for %s", group_id)
             raise JsonRpcError(str(exc), reason="workshop_apply_failed") from exc
+        try:
+            await asyncio.to_thread(_set_live_language, group_id, version.language)
+        except OSError as exc:
+            logger.warning("Could not save the language for %s: %s", group_id, exc)
         try:
             await ops.apply(selection, persist=True, force=True)
         except RouteError as exc:
@@ -177,6 +213,17 @@ def register_workshop_methods(
             }
         tried = await _call(store.mark_tried, group_id, number)
         return {"applied": True, "message": "The robot is now using the default." if number == 1 else f"The robot is now using version {number}.", "version": _version_json(tried)}
+
+    def _set_live_language(group_id: str, language: str) -> None:
+        """Set the speech language of the group's live profile: a code, "auto", or "" for the app default."""
+        key = f"{USER_PERSONALITIES_DIRNAME}/{live_profile_name(group_id)}"
+        languages = {k: v for k, v in config.PROFILE_LANGUAGES.items() if k != key}
+        if language:
+            languages[key] = language
+        if languages != config.PROFILE_LANGUAGES:
+            changes = AppSettings(profile_languages=languages)
+            update_settings(instance_path, changes)
+            apply_settings_to_runtime(changes)
 
     async def _state(_params: dict[str, Any]) -> dict[str, Any]:
         groups = []
@@ -197,6 +244,11 @@ def register_workshop_methods(
             "voices": get_available_voices(),
             "default_voice": get_default_voice(),
             "running_group": _running_group(),
+            "languages": language_choices(),
+            "auto_language": AUTO_LANGUAGE,
+            "paces": [{"id": key, "label": value["label"]} for key, value in PACES.items()],
+            "default_pace": DEFAULT_PACE,
+            "scenarios": SCENARIOS,
         }
 
     async def _group(params: dict[str, Any]) -> dict[str, Any]:
@@ -230,6 +282,9 @@ def register_workshop_methods(
             based_on=based_on if isinstance(based_on, int) and not isinstance(based_on, bool) else None,
             one_liner_names=names,
             voice=str(params.get("voice") or ""),
+            language=str(params["language"]) if isinstance(params.get("language"), str) else None,
+            pace=str(params["pace"]) if isinstance(params.get("pace"), str) else None,
+            designed_for=_string_list(params, "designed_for"),
         )
         result: dict[str, Any] = {"version": _version_json(version), "applied": False}
         if params.get("try"):
@@ -327,7 +382,46 @@ def register_workshop_methods(
             raise JsonRpcError("That recording is not on the robot", reason="unknown_recording", code=-32000) from exc
         return {"available": True, **result, **recording.status()}
 
+    async def _stories(params: dict[str, Any]) -> dict[str, Any]:
+        group_id = _group_param(params)
+        stories = await asyncio.to_thread(list_stories, group_id, instance_path)
+        return {"stories": [asdict(s) for s in stories]}
+
+    async def _forget_story(params: dict[str, Any]) -> dict[str, Any]:
+        group_id = _group_param(params)
+        removed = await asyncio.to_thread(forget_story, group_id, instance_path, str(params.get("id", "")))
+        if not removed:
+            raise JsonRpcError("That story is not saved", reason="unknown_story", code=-32000)
+        return {"forgotten": True}
+
+    @settings_app.get("/workshop/stories.csv")
+    def _stories_csv() -> Response:
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["group", "saved_at_utc", "told_by", "title", "story"])
+        for group_id in list_group_ids():
+            for story in reversed(list_stories(group_id, instance_path)):
+                writer.writerow([group_display_name(group_id), story.saved_at, story.told_by, story.title, story.story])
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="craft_at_large_stories.csv"'},
+        )
+
     rpc.register("workshop.volume", _volume)
+    async def _conversation(params: dict[str, Any]) -> dict[str, Any]:
+        group_id = _group_param(params)
+        return await asyncio.to_thread(conversation_memory.summary, group_id, instance_path)
+
+    async def _clear_conversation(params: dict[str, Any]) -> dict[str, Any]:
+        group_id = _group_param(params)
+        await asyncio.to_thread(conversation_memory.clear, group_id, instance_path)
+        return await asyncio.to_thread(conversation_memory.summary, group_id, instance_path)
+
+    rpc.register("workshop.stories", _stories)
+    rpc.register("workshop.conversation", _conversation)
+    rpc.register("workshop.clear_conversation", _clear_conversation)
+    rpc.register("workshop.forget_story", _forget_story)
     rpc.register("workshop.recording_downloaded", _recording_downloaded)
     rpc.register("workshop.recording", _recording)
     rpc.register("workshop.delete", _delete)

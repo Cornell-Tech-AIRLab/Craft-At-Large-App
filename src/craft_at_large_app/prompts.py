@@ -65,6 +65,18 @@ def get_session_instructions(instance_path: str | Path | None = None) -> str:
             "whatever language these instructions are written in."
         )
 
+    from craft_at_large_app.stories import format_stories_for_prompt
+    from craft_at_large_app.session_recorder import current_group
+    from craft_at_large_app.conversation_memory import format_conversations_for_prompt
+
+    group_id = current_group()
+    for remembered in (
+        format_stories_for_prompt(group_id, instance_path),
+        format_conversations_for_prompt(group_id, instance_path),
+    ):
+        if remembered:
+            instructions = f"{instructions}\n\n{remembered}"
+
     memory_prompt = format_memory_for_prompt(instance_path)
     if memory_prompt:
         return f"{memory_prompt}\n\n{instructions}"

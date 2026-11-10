@@ -1230,6 +1230,7 @@ async def test_run_session_response_lifecycle_toggles_done_event(monkeypatch: An
 async def test_local_barge_in_only_ducks_until_server_confirms(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sustained local speech ducks playback reversibly, never cancels on its own, and only ducks while playing."""
     monkeypatch.setattr(config, "LOCAL_BARGE_IN_ENABLED", True)
+    monkeypatch.setattr(config, "KEEP_TALKING", False)
     handler = _plain_handler()
     detector = MagicMock()
     detector.process.return_value = True
@@ -1267,6 +1268,7 @@ async def test_local_barge_in_only_ducks_until_server_confirms(monkeypatch: pyte
 @pytest.mark.asyncio
 async def test_server_interrupt_discards_late_audio_but_allows_next_response(monkeypatch: pytest.MonkeyPatch) -> None:
     """Audio arriving after interruption cannot restart the old response."""
+    monkeypatch.setattr(config, "KEEP_TALKING", False)
     delta = base64.b64encode(np.ones(512, dtype=np.int16).tobytes()).decode()
     handler = _session_handler(
         monkeypatch,
@@ -1317,6 +1319,7 @@ async def test_debug_vad_reports_probability_and_barge_in_without_extra_inferenc
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Debug reports are throttled without delaying state transitions or adding inference."""
+    monkeypatch.setattr(config, "KEEP_TALKING", False)
     monkeypatch.setattr(config, "LOCAL_BARGE_IN_ENABLED", True)
     handler = _plain_handler()
     detector = MagicMock()
@@ -1457,3 +1460,59 @@ async def test_silence_cue_can_be_turned_off(monkeypatch: Any) -> None:
 
     await handler.emit()
     handler.connection.conversation.item.create.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("said", "stops"),
+    [
+        ("Stop!", True),
+        ("Wait, hold on", True),
+        ("okay stop", True),
+        ("Shh", True),
+        ("I want to stop knitting for today", False),
+        ("Can you stop the music in the room and tell me a long story", False),
+        ("Rosa, pass the scissors", False),
+    ],
+)
+def test_only_short_stop_requests_end_the_robots_speech(said: str, stops: bool) -> None:
+    """Background talk is ignored while the robot speaks; a short stop request ends it."""
+    from craft_at_large_app.huggingface_realtime import is_stop_request
+
+    assert is_stop_request(said) is stops
+
+
+@pytest.mark.asyncio
+async def test_background_speech_does_not_cut_off_or_quiet_the_robot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With KEEP_TALKING on, speech in the room neither ducks nor interrupts playback."""
+    monkeypatch.setattr(config, "KEEP_TALKING", True)
+    monkeypatch.setattr(config, "LOCAL_BARGE_IN_ENABLED", True)
+    handler = _session_handler(monkeypatch, (_FakeEvent("input_audio_buffer.speech_started"),))
+    monkeypatch.setattr(handler, "_robot_is_speaking", lambda: True)
+    interrupt = AsyncMock()
+    monkeypatch.setattr(handler, "_interrupt_playback", interrupt)
+
+    await handler._run_realtime_session()
+
+    interrupt.assert_not_awaited()
+    assert handler.playback_gain == 1.0
+
+
+@pytest.mark.asyncio
+async def test_a_stop_request_still_ends_the_robots_speech(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Saying "stop" while the robot talks ends its speech."""
+    monkeypatch.setattr(config, "KEEP_TALKING", True)
+    handler = _session_handler(
+        monkeypatch,
+        (
+            _FakeEvent(
+                "conversation.item.input_audio_transcription.completed", transcript="Stop, please!", item_id="i1"
+            ),
+        ),
+    )
+    monkeypatch.setattr(handler, "_robot_is_speaking", lambda: True)
+    interrupt = AsyncMock()
+    monkeypatch.setattr(handler, "_interrupt_playback", interrupt)
+
+    await handler._run_realtime_session()
+
+    interrupt.assert_awaited()

@@ -43,6 +43,7 @@ from craft_at_large_app.prompts import get_session_voice, get_session_language, 
 from craft_at_large_app.workshop import saved_work_directory
 from craft_at_large_app.streaming import AdditionalOutputs, audio_to_float32
 from craft_at_large_app.memory_routes import register_memory_methods
+from craft_at_large_app.memory_search import warm_up as memory_warm_up
 from craft_at_large_app.profile_store import canonical_profile_name
 from craft_at_large_app.vision_routes import register_vision_methods
 from craft_at_large_app.settings_store import (
@@ -53,6 +54,7 @@ from craft_at_large_app.settings_store import (
 )
 from craft_at_large_app.language_routes import LanguageScope, register_language_methods
 from craft_at_large_app.workshop_routes import register_workshop_methods
+from craft_at_large_app.session_recorder import current_group
 from craft_at_large_app.startup_settings import read_startup_settings, write_startup_settings
 from craft_at_large_app.tools.core_tools import ToolDependencies, initialize_tools
 from craft_at_large_app.tool_space_routes import register_tool_space_methods
@@ -60,6 +62,8 @@ from craft_at_large_app.personality_routes import (
     build_personality_ops,
     register_personality_methods,
 )
+from craft_at_large_app.audio.voice_leveler import VoiceLeveler
+from craft_at_large_app.conversation_memory import add_line as add_conversation_line
 from craft_at_large_app.profile_tool_routes import register_profile_tool_methods
 from craft_at_large_app.audio.startup_config import apply_audio_startup_config
 from craft_at_large_app.conversation_handler import VADStatus, AudioFrame, ConversationHandler
@@ -141,6 +145,7 @@ class LocalStream:
         self._stop_event = asyncio.Event()
         self._playback_flush_lock = asyncio.Lock()
         self._playback_clock = 0.0  # monotonic end of audio pushed to the SDK
+        self._voice_leveler = VoiceLeveler()
         self._restart_requested = asyncio.Event()
         self._tasks: List[asyncio.Task[None]] = []
         self._handler_factory = handler_factory
@@ -201,6 +206,8 @@ class LocalStream:
         params: dict[str, object] = {"role": role, "text": text, "final": final}
         if final and self._recorder is not None:
             self._recorder.record_transcript(role, text)
+        if final:
+            add_conversation_line(current_group(), self._instance_path, role, text)
         if final:
             self._publish_conversation_event("conversation.transcript", params)
         elif self._rpc is not None:
@@ -724,6 +731,9 @@ class LocalStream:
                     recording=self._recorder,
                 )
                 logger.info("Workshop page at /workshop, saved work in %s", saved_work)
+                threading.Thread(
+                    target=memory_warm_up, args=(workshop_path,), name="memory-search-warm-up", daemon=True
+                ).start()
             except Exception:
                 logger.exception("Failed to register workshop methods; the workshop page will be unavailable")
 
@@ -1067,6 +1077,8 @@ class LocalStream:
 
                 # Cast if needed
                 audio_frame = audio_to_float32(audio_data)
+                if config.LEVEL_VOICE:
+                    audio_frame = self._voice_leveler.process(audio_frame)
 
                 if handler.paced_playback is True:
                     chunk_samples = max(1, sample_rate // 50)

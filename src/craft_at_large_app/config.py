@@ -353,6 +353,11 @@ class Config:
     CAMERA_ENABLED = _env_flag(CAMERA_ENABLED_ENV, default=True)
     LOCAL_VAD_ENABLED = _env_flag("LOCAL_VAD_ENABLED", default=True)
     LOCAL_BARGE_IN_ENABLED = _env_flag("LOCAL_BARGE_IN_ENABLED", default=True)
+    # Craft@Large: in a crafting circle, background talk must not turn the robot down or cut it off.
+    # Only a short "stop"-style request ends its speech. CRAFT_KEEP_TALKING=0 restores Pollen's behavior.
+    KEEP_TALKING = _env_flag("CRAFT_KEEP_TALKING", default=True)
+    # Even out quiet and loud voices before they reach the speaker. CRAFT_LEVEL_VOICE=0 turns it off.
+    LEVEL_VOICE = _env_flag("CRAFT_LEVEL_VOICE", default=True)
     HF_TOKEN = os.getenv("HF_TOKEN")  # Optional, falls back to hf auth login if not set
 
     logger.debug(
@@ -471,6 +476,8 @@ def refresh_runtime_config_from_env() -> None:
     config.CAMERA_ENABLED = _env_flag(CAMERA_ENABLED_ENV, default=True)
     config.LOCAL_VAD_ENABLED = _env_flag("LOCAL_VAD_ENABLED", default=True)
     config.LOCAL_BARGE_IN_ENABLED = _env_flag("LOCAL_BARGE_IN_ENABLED", default=True)
+    config.KEEP_TALKING = _env_flag("CRAFT_KEEP_TALKING", default=True)
+    config.LEVEL_VOICE = _env_flag("CRAFT_LEVEL_VOICE", default=True)
 
 
 # Files the app writes into its instance directory, migrated once when the
