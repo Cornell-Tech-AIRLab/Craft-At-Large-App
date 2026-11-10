@@ -570,7 +570,7 @@ function renderGroup() {
   state.tab ||= "edit";
   const tabs = el("nav", { class: "tabs", "aria-label": "Sections" },
     el("button", { class: "tab", "aria-current": state.tab === "edit" ? "page" : null, onclick: () => { state.tab = "edit"; renderGroup(); } }, "Write one-liners"),
-    el("button", { class: "tab", "aria-current": state.tab === "everyone" ? "page" : null, onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Design for everyone"),
+    SHOW_DESIGN_FOR_EVERYONE ? el("button", { class: "tab", "aria-current": state.tab === "everyone" ? "page" : null, onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Design for everyone") : null,
     el("button", { class: "tab", "aria-current": state.tab === "versions" ? "page" : null, onclick: () => { state.tab = "versions"; renderGroup(); } },
       `Versions (${group.versions.length})`));
   const onRobot = group.running && group.active_version != null
@@ -585,7 +585,7 @@ function renderGroup() {
       tabs,
       el("div", { class: "spacer" }),
       onRobot),
-    state.tab === "edit" ? renderEditor() : state.tab === "everyone" ? renderEveryone() : renderHistory());
+    state.tab === "edit" ? renderEditor() : state.tab === "everyone" && SHOW_DESIGN_FOR_EVERYONE ? renderEveryone() : renderHistory());
 }
 
 function renderEditor() {
@@ -703,9 +703,9 @@ function renderEditor() {
     el("h3", { class: "settings-label" }, "What can the robot do?"),
     el("p", { class: "hint" }, "Tap to turn on or off."),
     moves,
-    el("h3", { class: "settings-label" }, "Language and talking speed"),
-    el("p", { class: "access-summary" }, `${languageName(draft.language)} · ${paceName(draft.pace)} · `,
-      el("button", { class: "linkish", type: "button", onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Change in Design for everyone")),
+    ...(SHOW_DESIGN_FOR_EVERYONE ? [el("h3", { class: "settings-label" }, "Language and talking speed"),
+      el("p", { class: "access-summary" }, `${languageName(draft.language)} · ${paceName(draft.pace)} · `,
+        el("button", { class: "linkish", type: "button", onclick: () => { state.tab = "everyone"; renderGroup(); } }, "Change in Design for everyone"))] : []),
     volumeControl());
 
 
@@ -762,6 +762,8 @@ function renderEditor() {
 }
 
 /* ---------- Design for everyone: multilingual and accessible circles ---------- */
+// Turned off for now: the tab and its language and talking-speed lines are hidden. Set to true to bring them back.
+const SHOW_DESIGN_FOR_EVERYONE = false;
 const languageName = (code) => {
   if (!code) return "App default language";
   if (code === state.autoLanguage) return "Each person's language";
@@ -968,11 +970,11 @@ function renderHistory() {
         el("strong", {}, "Voice: "), voiceName(selected.voice || state.defaultVoice),
         el("span", { class: "dot" }, " · "),
         el("strong", {}, "Can: "), selected.movements.length ? selected.movements.map(movementLabel).join(", ") : "only talk",
-        el("br"),
-        el("strong", {}, "Language: "), languageName(selected.language),
-        el("span", { class: "dot" }, " · "),
-        el("strong", {}, "Talking speed: "), paceName(selected.pace),
-        selected.designed_for?.length ? [el("br"), el("strong", {}, "Designed for: "), selected.designed_for.map(scenarioName).join(", ")] : null),
+        SHOW_DESIGN_FOR_EVERYONE ? [el("br"),
+          el("strong", {}, "Language: "), languageName(selected.language),
+          el("span", { class: "dot" }, " · "),
+          el("strong", {}, "Talking speed: "), paceName(selected.pace),
+          selected.designed_for?.length ? [el("br"), el("strong", {}, "Designed for: "), selected.designed_for.map(scenarioName).join(", ")] : null] : null),
       lines.length ? null : el("p", { class: "muted" }, "No one-liners yet."),
       el("ol", { class: "prompt-lines" }, lines.map((line, i) => el("li", {},
         selected.one_liner_names?.[i] ? el("div", { class: "liner-name" }, selected.one_liner_names[i]) : null,
@@ -1008,13 +1010,13 @@ function showDiff(version) {
     el("div", { class: "legend" }, el("span", {}, el("ins", {}, "Green"), " = added"), el("span", {}, el("del", {}, "Red"), " = removed")),
     unchanged ? el("p", {}, "The words are the same.") :
       el("div", { class: "diff" }, parts.map((p) => p.kind === "same" ? p.text : el(p.kind, {}, p.text))),
-    (previous.language || "") !== (version.language || "")
+    SHOW_DESIGN_FOR_EVERYONE && (previous.language || "") !== (version.language || "")
       ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Language: "), `${languageName(previous.language)} → ${languageName(version.language)}`)
       : null,
-    (previous.pace || state.defaultPace) !== (version.pace || state.defaultPace)
+    SHOW_DESIGN_FOR_EVERYONE && (previous.pace || state.defaultPace) !== (version.pace || state.defaultPace)
       ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Talking speed: "), `${paceName(previous.pace)} → ${paceName(version.pace)}`)
       : null,
-    (previous.designed_for || []).join() !== (version.designed_for || []).join()
+    SHOW_DESIGN_FOR_EVERYONE && (previous.designed_for || []).join() !== (version.designed_for || []).join()
       ? el("p", { style: "margin-top:16px" }, el("strong", {}, "Designed for: "), (version.designed_for || []).map(scenarioName).join(", ") || "nobody")
       : null,
     (previous.voice || state.defaultVoice) !== (version.voice || state.defaultVoice)
