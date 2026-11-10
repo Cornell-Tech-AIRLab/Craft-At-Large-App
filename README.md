@@ -24,7 +24,7 @@ Keep this folder in your home folder, not on an iCloud-synced Desktop. iCloud hi
 
 1. Turn on the robot and put it on the same Wi-Fi as the laptop.
 2. Find the robot's IP address in the Reachy Mini Control app (Make sure this app is open).
-4. Start the app, using your robot's IP address:
+3. Start the app, using your robot's IP address:
 
 ```bash
 cd ~/craft_at_large_app
@@ -32,7 +32,7 @@ source .venv/bin/activate
 craft-at-large-app --ui --robot-host 192.168.1.42
 ```
 
-5. Open http://localhost:7860/workshop and pick a group.
+4. Open http://localhost:7860/workshop and pick a group.
 
 The app starts the robot by itself. Stop the app with Ctrl+C.
 
@@ -91,7 +91,9 @@ python -m craft_at_large_app.memory_search --check
 
 - `saved_work/` holds each group's versions.
 - `saved_work/conversations/` and `saved_work/stories/` hold what each group's robot remembers.
-- `recordings/` holds transcripts and photos. Clicking "Stop recording" also downloads the session as a zip to the laptop. When the app runs on the robot, the robot deletes its copy once the zip has fully downloaded.
+- `recordings/` holds transcripts and photos. Clicking "Stop recording" also downloads the session as a zip.
 - `profiles/craft_group_*/` holds each group's Default prompt (`profile.md`), name (`name.txt`) and card photo (`photo.png`).
 
 `saved_work/` and `recordings/` contain participant data. They stay on the laptop and are not uploaded to GitHub.
+
+Each group's memory and versions live on the laptop it used. Keep each group on the same laptop every week. If a group must switch laptops, copy its files from `saved_work/` (`craft_group_x.json`, `conversations/craft_group_x.jsonl`, `stories/craft_group_x.json`) to the new laptop first.
