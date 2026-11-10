@@ -1,16 +1,3 @@
----
-title: Craft@Large Robot Studio
-emoji: 🧵
-colorFrom: red
-colorTo: yellow
-sdk: static
-pinned: false
-short_description: Workshop groups edit and version Reachy Mini's personality
-tags:
- - reachy_mini
- - reachy_mini_python_app
----
-
 # Craft@Large Robot Studio
 
 A web page where Craft@Large groups write their robot's one-liners, pick a voice and abilities, save versions, and try them on a Reachy Mini. Built on Pollen Robotics' Reachy Mini conversation app.
@@ -36,8 +23,7 @@ Keep this folder in your home folder, not on an iCloud-synced Desktop. iCloud hi
 ## Run with the robot
 
 1. Turn on the robot and put it on the same Wi-Fi as the laptop.
-2. Find the robot's IP address in the Reachy Mini Control app.
-3. Quit the Reachy Mini Control app, so only one app controls the robot.
+2. Find the robot's IP address in the Reachy Mini Control app (Make sure this app is open).
 4. Start the app, using your robot's IP address:
 
 ```bash
